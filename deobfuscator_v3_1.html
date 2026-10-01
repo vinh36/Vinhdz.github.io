@@ -1,0 +1,2052 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🔥 Deobfuscator Shell v3.1 — Quote-Aware</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0a15; --bg2: #1a0b2e;
+    --card: rgba(25, 25, 40, 0.9);
+    --border: rgba(168, 85, 247, 0.25);
+    --purple: #a855f7; --pink: #ec4899; --cyan: #00d4ff;
+    --green: #22c55e; --red: #ef4444; --yellow: #f59e0b;
+    --text: #e0e0e0; --text-dim: #a0a0b0; --text-mute: #707080;
+  }
+  body {
+    font-family: 'Segoe UI', Roboto, sans-serif;
+    background: linear-gradient(135deg, var(--bg) 0%, var(--bg2) 100%);
+    color: var(--text); min-height: 100vh; padding: 16px; font-size: 14px;
+  }
+  .container { max-width: 1400px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 18px; }
+  header h1 {
+    font-size: 1.9em;
+    background: linear-gradient(90deg, var(--cyan), var(--purple), var(--pink));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    margin-bottom: 4px;
+  }
+  header p { color: var(--text-dim); font-size: 0.85em; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin-bottom: 14px;
+  }
+  .card h3 { color: var(--purple); margin-bottom: 10px; font-size: 1em; }
+
+  textarea {
+    width: 100%; min-height: 130px; padding: 12px;
+    background: #0a0a12; border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text);
+    font-family: 'Consolas', monospace; font-size: 0.85em;
+    resize: vertical; outline: none;
+  }
+  textarea:focus { border-color: var(--purple); }
+
+  input[type="text"], input[type="number"], select {
+    padding: 8px 10px; background: #0d0d15;
+    border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); font-size: 0.85em; outline: none; width: 100%;
+  }
+  input:focus, select:focus { border-color: var(--purple); }
+
+  .config-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 10px; margin-top: 10px;
+  }
+  .config-item { display: flex; flex-direction: column; gap: 4px; }
+  .config-item label { font-size: 0.78em; color: var(--text-dim); }
+
+  .btn-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px; margin-top: 12px;
+  }
+  .btn {
+    padding: 12px 16px; border: none; border-radius: 10px;
+    color: white; font-size: 0.9em; font-weight: 700;
+    cursor: pointer; transition: all 0.15s; letter-spacing: 0.3px;
+  }
+  .btn:hover:not(:disabled) { transform: translateY(-2px); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-primary { background: linear-gradient(135deg, var(--cyan), var(--purple)); }
+  .btn-primary:hover:not(:disabled) { box-shadow: 0 8px 25px rgba(168, 85, 247, 0.45); }
+  .btn-green { background: linear-gradient(135deg, var(--green), #16a34a); }
+  .btn-green:hover:not(:disabled) { box-shadow: 0 8px 25px rgba(34, 197, 94, 0.45); }
+  .btn-small {
+    padding: 7px 14px; font-size: 0.8em; border-radius: 6px;
+    background: rgba(0, 212, 255, 0.15);
+    border: 1px solid var(--cyan); color: var(--cyan); cursor: pointer;
+  }
+  .btn-small:hover { background: rgba(0, 212, 255, 0.3); }
+
+  .drop-zone {
+    border: 2px dashed var(--purple); border-radius: 10px;
+    padding: 30px 20px; text-align: center; cursor: pointer;
+    transition: all 0.25s; background: rgba(168, 85, 247, 0.05);
+  }
+  .drop-zone:hover, .drop-zone.dragover {
+    background: rgba(168, 85, 247, 0.15); border-color: var(--cyan);
+  }
+  .drop-zone .icon { font-size: 2.5em; margin-bottom: 6px; }
+  .drop-zone p { color: #c0c0d0; margin: 3px 0; }
+  .drop-zone .hint { font-size: 0.78em; color: var(--text-mute); }
+  input[type="file"] { display: none; }
+
+  .file-list { display: none; margin-top: 10px; max-height: 250px; overflow-y: auto; }
+  .file-list.show { display: block; }
+  .file-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 12px; background: rgba(0, 212, 255, 0.06);
+    border-left: 3px solid var(--cyan); border-radius: 6px;
+    margin-bottom: 5px; font-size: 0.82em;
+  }
+  .file-item .name { color: var(--cyan); font-weight: 600; }
+  .file-item .meta { color: var(--text-mute); font-size: 0.8em; }
+  .file-item .remove {
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid var(--red); color: #fca5a5;
+    border-radius: 4px; padding: 3px 9px;
+    cursor: pointer; font-size: 0.8em; margin-left: 8px;
+  }
+  .type-badge {
+    display: inline-block; padding: 2px 8px;
+    border-radius: 10px; font-size: 0.7em;
+    font-weight: 700; text-transform: uppercase; margin-left: 6px;
+  }
+  .type-text { background: rgba(34, 197, 94, 0.25); color: #86efac; }
+  .type-binary { background: rgba(245, 158, 11, 0.25); color: #fcd34d; }
+  .type-archive { background: rgba(168, 85, 247, 0.25); color: #d8b4fe; }
+  .type-script { background: rgba(236, 72, 153, 0.25); color: #f9a8d4; }
+
+  .status {
+    padding: 10px 14px; border-radius: 6px; margin-top: 10px;
+    font-size: 0.85em; display: none;
+  }
+  .status.show { display: block; }
+  .status.success { background: rgba(34, 197, 94, 0.15); border-left: 3px solid var(--green); color: #86efac; }
+  .status.error { background: rgba(239, 68, 68, 0.15); border-left: 3px solid var(--red); color: #fca5a5; }
+  .status.info { background: rgba(59, 130, 246, 0.15); border-left: 3px solid #3b82f6; color: #93c5fd; }
+
+  .progress-bar {
+    width: 100%; height: 6px; background: rgba(0,0,0,0.3);
+    border-radius: 3px; overflow: hidden; margin-top: 10px; display: none;
+  }
+  .progress-bar.show { display: block; }
+  .progress-bar .fill {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, var(--cyan), var(--purple), var(--pink));
+    transition: width 0.15s linear;
+  }
+
+  .pipeline { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+  .pipeline-step {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; border-radius: 6px;
+    background: rgba(30, 30, 46, 0.5);
+    font-size: 0.82em; transition: all 0.2s;
+  }
+  .pipeline-step.pending { opacity: 0.4; }
+  .pipeline-step.active { background: rgba(168, 85, 247, 0.2); border-left: 3px solid var(--purple); }
+  .pipeline-step.done { background: rgba(34, 197, 94, 0.1); border-left: 3px solid var(--green); }
+  .pipeline-step .step-icon {
+    width: 24px; height: 24px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(168, 85, 247, 0.3); font-size: 0.75em;
+    font-weight: 700; flex-shrink: 0;
+  }
+  .pipeline-step.active .step-icon { background: linear-gradient(135deg, var(--purple), var(--pink)); color: white; }
+  .pipeline-step.done .step-icon { background: linear-gradient(135deg, var(--green), #16a34a); color: white; }
+  .pipeline-step .step-label { flex: 1; }
+  .pipeline-step .step-result { font-size: 0.85em; color: var(--text-mute); }
+  .pipeline-step.done .step-result { color: #86efac; }
+
+  .summary {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(16, 185, 129, 0.08));
+    border: 2px solid var(--green);
+    border-radius: 12px; padding: 14px; margin-bottom: 14px;
+  }
+  .summary.negative {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.05));
+    border-color: var(--red);
+  }
+  .summary .verdict { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .summary .verdict-icon { font-size: 1.8em; }
+  .summary .verdict-text { font-size: 1.1em; font-weight: 700; }
+  .summary .verdict-text.positive { color: #86efac; }
+  .summary .verdict-text.negative { color: #fca5a5; }
+  .summary .detail { font-size: 0.85em; color: #c0c0d0; line-height: 1.6; }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 8px; margin-bottom: 12px;
+  }
+  .stat-box {
+    background: rgba(0, 212, 255, 0.08);
+    border: 1px solid rgba(0, 212, 255, 0.3);
+    border-radius: 8px; padding: 9px; text-align: center;
+  }
+  .stat-box .num { font-size: 1.4em; font-weight: 700; color: var(--cyan); display: block; }
+  .stat-box .label { font-size: 0.68em; color: var(--text-mute); text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .file-tabs {
+    display: flex; gap: 5px; margin-bottom: 10px;
+    overflow-x: auto; padding-bottom: 6px;
+    border-bottom: 1px solid rgba(168, 85, 247, 0.2);
+  }
+  .file-tab {
+    padding: 6px 11px; background: rgba(45, 27, 78, 0.5);
+    border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text-dim); cursor: pointer; font-size: 0.78em;
+    white-space: nowrap;
+  }
+  .file-tab.active {
+    background: linear-gradient(135deg, var(--purple), var(--pink));
+    color: white; border-color: transparent; font-weight: 600;
+  }
+  .file-tab .badge-count {
+    display: inline-block; background: rgba(255,255,255,0.2);
+    padding: 0 5px; border-radius: 6px;
+    font-size: 0.75em; margin-left: 4px;
+  }
+
+  pre.output-pre {
+    background: #0a0a12; border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px;
+    font-family: Consolas, monospace;
+    font-size: 0.78em; line-height: 1.5; color: #b0ffb0;
+    max-height: 500px; overflow: auto;
+    white-space: pre-wrap; word-break: break-all;
+  }
+
+  .spinner {
+    display: inline-block; width: 13px; height: 13px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: white; border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 5px; vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .auto-badge {
+    display: inline-block; padding: 3px 10px;
+    background: linear-gradient(135deg, var(--green), #16a34a);
+    border-radius: 12px; font-size: 0.72em;
+    font-weight: 700; color: white; margin-left: 6px;
+    text-transform: uppercase;
+  }
+  .mega-badge {
+    background: linear-gradient(135deg, #f59e0b, #ef4444);
+  }
+
+  .info-box {
+    background: rgba(59, 130, 246, 0.1);
+    border-left: 3px solid #3b82f6;
+    border-radius: 6px; padding: 9px 12px;
+    font-size: 0.8em; color: #93c5fd;
+    margin-top: 10px; line-height: 1.5;
+  }
+  .info-box.new {
+    background: rgba(34, 197, 94, 0.1);
+    border-left-color: var(--green);
+    color: #86efac;
+  }
+
+  @media (max-width: 600px) {
+    header h1 { font-size: 1.3em; }
+    .card { padding: 12px; }
+    body { padding: 10px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>🔥 DEOBFUSCATOR SHELL v3.1 <span class="auto-badge mega-badge">QUOTE-AWARE</span></h1>
+    <p>Nhận diện mã hóa kể cả khi có dấu nháy ở bất kỳ vị trí nào</p>
+  </header>
+
+  <div class="card">
+    <h3>📝 Nhập dữ liệu</h3>
+    <textarea id="inputText" placeholder="Dán nguyên file, chuỗi có dấu nháy, escape... tool tự nhận diện">#!/system/bin/sh
+H='33352c33332c34372c3131352c3132312c3131352c3131362c3130312c3130392c34372c39382c3130352c3131302c34372c3131352c3130342c31302c33352c33322c3130382c3131332c3130382c39372c3130332c34362c3131352c3130342c33322c34352c33322c37302c3130352c3132302c33322c3130382c39372c3130332c33322c37362c3130352c3130312c3131302c33322c38312c3131372c39372c3131302c33322c34332c33322c3131362c3130352c3130312c3131362c33322c3131322c3130352c3131302c31302c33352c33322c38342c39372c39392c33322c3130332c3130352c39372c35382c33322c37322c3131312c39372c3131302c3130332c33322c37382c3131312c33322c38342c3130312c39392c3130342c31302c31302c3130312c3132302c3131322c3131312c3131342c3131362c33322c38302c36352c38342c37322c36312c34372c3131352c3132312c3131352c3131362c3130312c3130392c34372c39382c3130352c3131302c35382c34372c3131352c3132312c3131352c3131362c3130312c3130392c34372c3132302c39382c3130352c3131302c35382c33362c38302c36352c38342c37322c31302c3131312c3130372c34302c34312c3132332c33322c3130312c39392c3130342c3131312c33322c33342c39312c37392c37352c39332c33322c33362c34392c33342c35392c33322c3132352c31302c3131352c3130372c34302c34312c3132332c33322c3130312c39392c3130342c3131312c33322c33342c39312c38332c37352c37332c38302c39332c33322c33362c34392c33342c35392c33322c3132352c31302c31302c3131322c3131372c3131362c3130332c34302c34312c3132332c31302c33322c33322c3131352c3130312c3132362c3131362c3130352c3131302c3130332c3131352c33322c3131322c3131372c3131362c33322c3130332c3130382c3131312c39382c39372c3130382c33322c33342c33362c34392c33342c33322c33342c33362c35302c33342c33322c35302c36322c34372c3130302c3130312c3131382c34372c3131302c3131372c3130382c3130382c33322c3132342c3132342c33322c3132332c33322c3131352c3130372c33322c33342c33362c34392c33342c35392c33322c3131342c3130312c3131362c3131372c3131342c3131302c35392c33322c3132352c31302c33322c33322c3131302c36312c33362c34302c3131352c3130312c3132362c3131362c3130352c3131302c3130332c3131352c33322c3130332c3130312c3131362c33322c3130332c3130382c3131312c39382c39372c3130382c33322c33342c33362c34392c33342c33322c35302c36322c34372c3130302c3130312c3131382c34372c3131302c3131372c3130382c3130382c34312c31302c33322c33322c39312c33322c33342c33362c3131302c33342c33322c36312c33322c33342c33362c35302c33342c33322c39332c33322c33382c33382c33322c3131312c3130372c33322c33342c33362c34392c36312c33362c35302c33342c33322c3132342c3132342c33322c3131352c3130372c33322c33342c33362c34392c33342c31302c3132352c31302c31302c3130312c39392c3130342c3131312c33322c33342c37362c38312c33322c37362c36352c37312c33322c3132342c33322c37322c3131312c39372c3131302c3130332c33322c37382c3131312c33322c38342c3130312c39392c3130342c33342c31302c3130312c39392c3130342c3131312c33322c33342c33362c34302c3130332c3130312c3132362c3131322c3131342c3131312c3131322c33322c3131342c3131312c34362c3131322c3131342c3131312c3130302c3131372c39392c3131362c34362c3130392c3131312c3130302c3130312c3130382c34312c33322c3131352c3130302c3130372c36312c33362c34302c3130332c3130312c3132362c3131362c3131322c3131342c3131312c3131322c33322c3131342c3131312c34362c39382c3131372c3130352c3130382c3130302c34362c3131382c3130312c3131342c3131352c3130352c3131312c3131302c34362c3131352c3130302c3130372c34312c33342c31302c31302c38302c37352c37312c36312c33342c33342c31302c3130322c3131312c3131342c33322c3131322c33322c3130352c3131302c33322c39392c3131312c3130392c34362c3130332c39372c3131342c3130312c3131302c39372c34362c3130332c39372c3130392c3130312c34362c3130372c3130332c3131382c3131302c33322c39392c3131312c3130392c34362c3130332c39372c3131342c3130312c3131302c39372c34362c3130332c39372c3130392c3130312c34362c3130372c3130332c3131362c3130342c33322c39392c3131312c3130392c34362c3130332c39372c3131342c3130312c3131302c39372c34362c3130332c39372c3130392c3130312c34362c3130372c3130332c3131362c3131392c33322c39392c3131312c3130392c34362c3130332c39372c3131342c3130312c3131302c39372c34362c3130332c39372c3130392c3130312c34362c3130372c3130332c3130352c3130302c35392c33322c3130302c3131312c31302c33322c33322c3131322c3130392c33322c3131322c39372c3131362c3130342c33322c33342c33362c3131322c33342c33322c36322c34372c3130302c3130312c3131382c34372c3131302c3131372c3130382c3130382c33322c35302c36322c33382c34392c33322c33382c33382c33322c38302c37352c37312c36312c33342c33362c3131322c33342c33322c33382c33382c33322c39382c3131342c3130312c39372c3130372c31302c3130302c3131312c3131302c3130312c31302c39312c33322c34352c3131302c33322c33342c33362c38302c37352c37312c33342c33322c39332c33322c33382c33382c33322c3131312c3130372c33322c33342c3131322c3130372c3130332c36312c33362c38302c37352c37312c33342c33322c3132342c3132342c33322c3131352c3130372c33322c33342c3130372c3130342c3131312c3131302c3130332c33322c3131362c3130342c39372c3132312c33322c37362c3130352c3130312c3131302c33322c38312c3131372c39372c3131302c33342c31302c31302c33352c33322c3131362c3131312c3130352c33322c3131372c3131372c33322c3130332c39372c3130392c3130312c31302c3131322c3131372c3131362c3130332c33322c3130332c39372c3130392c3130312c39352c3131362c3131312c3131372c39392c3130342c39352c3131342c3130312c3131352c3131322c3131312c3131302c3131352c3130312c39352c39382c3131312c3131312c3131352c3131362c33322c34392c31302c3131322c3131372c3131362c3130332c33322c3130332c39372c3130392c3130312c39352c3130352c3131302c3131322c3131372c3131362c39352c3130382c39372c3131362c3130312c3131302c39392c3132312c39352c3131312c3131322c3131362c3130352c3130392c3130352c3132322c39372c3131362c3130352c3131312c3131302c33322c34392c3130'
+C=$(printf '%s' "$H" | sed 's/\(..\)/\\x\1/g')
+C=$(printf "$C")
+printf '%s' "$C" | awk -F',' '{for(i=1;i<=NF;i++) printf("%c", $i)}' | sh</textarea>
+    <div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; align-items:center;">
+      <button class="btn-small" id="pasteBtn">📥 Dán</button>
+      <button class="btn-small" id="clearBtn">🗑️ Xóa</button>
+      <span id="charCount" style="font-size:0.75em; color:var(--text-mute); margin-left:auto;"></span>
+    </div>
+    <div style="margin-top: 12px;">
+      <div class="drop-zone" id="dropZone">
+        <div class="icon">📤</div>
+        <p><strong>Hoặc kéo thả file</strong></p>
+        <p class="hint">.sh, .txt, .js, .xml, .apk, .zip...</p>
+      </div>
+      <input type="file" id="fileInput" multiple>
+      <div class="file-list" id="fileList"></div>
+    </div>
+    <div class="info-box new">
+      🎁 <strong>v3 QUOTE-AWARE:</strong> Nhận diện mã hóa <strong>kể cả khi có dấu nháy</strong> ở bất kỳ vị trí:
+      <code>'hex'</code>, <code>"hex"</code>, <code>`hex`</code>, <code>\'hex\'</code>, lồng nhau, có escape, có comment.
+      Không cần strip trước — tool tự xử lý.
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>⚙️ Cấu hình</h3>
+    <div class="config-row">
+      <div class="config-item">
+        <label>🔢 Số tầng tối đa</label>
+        <input type="number" id="maxLayers" value="12" min="1" max="30">
+      </div>
+      <div class="config-item">
+        <label>📊 Cải thiện tối thiểu</label>
+        <input type="number" id="minImprove" value="2" min="0" max="50">
+      </div>
+      <div class="config-item">
+        <label>🎯 Điểm tối thiểu</label>
+        <input type="number" id="minScore" value="15" min="0" max="100">
+      </div>
+      <div class="config-item">
+        <label>🔐 Key crypto</label>
+        <input type="text" id="cryptoKey" placeholder="Tùy chọn...">
+      </div>
+    </div>
+
+    <div class="checkbox-row" style="display:flex; align-items:center; gap:8px; margin-top:10px; padding:9px 12px; background:rgba(0,212,255,0.06); border-radius:8px; font-size:0.82em; color:#c0c0d0;">
+      <input type="checkbox" id="quoteAware" checked style="width:16px;height:16px;accent-color:var(--purple);cursor:pointer;">
+      <label for="quoteAware"><strong>🎯 Quote-Aware</strong> — nhận diện mã hóa khi có dấu nháy (kể cả không cần strip)</label>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="autoBtn">⚡ CHẠY TỰ ĐỘNG TẤT CẢ</button>
+      <button class="btn btn-green" id="zipBtn" disabled>📦 XUẤT ZIP</button>
+    </div>
+
+    <div class="progress-bar" id="progressBar"><div class="fill" id="progressFill"></div></div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="card" id="pipelineCard" style="display:none;">
+    <h3>🔄 Pipeline</h3>
+    <div class="pipeline" id="pipeline">
+      <div class="pipeline-step pending" data-step="detect"><div class="step-icon">1</div><div class="step-label">🔍 Dò tất cả</div><div class="step-result"></div></div>
+      <div class="pipeline-step pending" data-step="identify"><div class="step-icon">2</div><div class="step-label">🎯 Xác định</div><div class="step-result"></div></div>
+      <div class="pipeline-step pending" data-step="chain"><div class="step-icon">3</div><div class="step-label">⛓️ Bóc tầng</div><div class="step-result"></div></div>
+      <div class="pipeline-step pending" data-step="tree"><div class="step-icon">4</div><div class="step-label">🌳 Cây</div><div class="step-result"></div></div>
+      <div class="pipeline-step pending" data-step="output"><div class="step-icon">5</div><div class="step-label">✨ Tổng hợp</div><div class="step-result"></div></div>
+    </div>
+  </div>
+
+  <div id="summaryCard" style="display:none;">
+    <div class="summary" id="summary"></div>
+  </div>
+
+  <div class="card" id="resultCard" style="display:none;">
+    <h3>✅ Kết quả</h3>
+    <div class="stats" id="stats"></div>
+    <div class="file-tabs" id="fileTabs"></div>
+    <pre class="output-pre" id="outputPre"></pre>
+    <div style="display: flex; justify-content: flex-end; gap: 6px; margin-top: 10px; flex-wrap: wrap;">
+      <button class="btn-small" id="copyBtn">📋 Copy</button>
+      <button class="btn-small" id="downloadBtn">💾 Tải file</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ==================== QUOTE-AWARE EXTRACTOR ====================
+/**
+ * Trích xuất payload từ input có dấu nháy ở BẤT KỲ vị trí nào
+ * Hỗ trợ: '...', "...", `...`, \'...\', \"...\", lồng nhau, escape
+ * Trả về: { payload, mode, details }
+ */
+function quoteAwareExtract(input) {
+  const result = {
+    payload: input,
+    mode: "raw",
+    details: []
+  };
+
+  // Bước 1: Loại bỏ comment shell ở đầu dòng (nhưng giữ nguyên nếu input ngắn)
+  let text = input;
+  if (text.length > 200) {
+    text = text.replace(/^[ \t]*#[^\n]*/gm, "");
+    if (text !== input) result.details.push("Đã bỏ comment");
+  }
+
+  // Bước 2: Tìm TẤT CẢ chuỗi được bọc trong nháy (bất kỳ loại nào)
+  // Regex này bắt: '...', "...", `...` (không bao gồm dấu nháy bên trong)
+  const quotedStrings = [];
+  const patterns = [
+    { re: /'([^'\\]*(?:\\.[^'\\]*)*)'/g, type: "'", group: 1 },   // '...'
+    { re: /"([^"\\]*(?:\\.[^"\\]*)*)"/g, type: '"', group: 1 },   // "..."
+    { re: /`([^`\\]*(?:\\.[^`\\]*)*)`/g, type: "`", group: 1 }    // `...`
+  ];
+
+  for (const p of patterns) {
+    let m;
+    while ((m = p.re.exec(text)) !== null) {
+      quotedStrings.push({
+        content: m[p.group],
+        type: p.type,
+        start: m.index,
+        end: m.index + m[0].length,
+        raw: m[0]
+      });
+    }
+  }
+
+  // Bước 3: Nếu có chuỗi trong nháy → tìm chuỗi dài nhất (thường là payload chính)
+  if (quotedStrings.length > 0) {
+    // Sắp xếp theo độ dài giảm dần
+    quotedStrings.sort((a, b) => b.content.length - a.content.length);
+    const best = quotedStrings[0];
+
+    // Chỉ dùng nếu chuỗi đó có vẻ là payload (hex/base64 dài hoặc có cấu trúc)
+    const cleanContent = best.content.replace(/\s/g, "");
+    const isLikelyPayload =
+      cleanContent.length >= 40 &&
+      (/^[0-9a-fA-F]+$/.test(cleanContent) ||
+       /^[A-Za-z0-9+/=_-]+$/.test(cleanContent) ||
+       /^\d+([,\s]+\d+){3,}/.test(best.content) ||
+       /^[A-Za-z0-9+/=]{40,}/.test(cleanContent));
+
+    if (isLikelyPayload) {
+      result.payload = best.content;
+      result.mode = "quoted-" + best.type;
+      result.details.push(`Trích xuất chuỗi trong nháy ${best.type} (${best.content.length} ký tự)`);
+      return result;
+    }
+  }
+
+  // Bước 4: Không có chuỗi trong nháy dài → thử bỏ nháy ở đầu/cuối (nhiều lớp)
+  let prev;
+  let layersStripped = 0;
+  do {
+    prev = text;
+    text = text.trim();
+    if (text.length >= 2) {
+      const first = text[0];
+      const last = text[text.length - 1];
+      if ((first === "'" && last === "'") ||
+          (first === '"' && last === '"') ||
+          (first === "`" && last === "`")) {
+        // Kiểm tra escape: nếu ký tự cuối bị escape thì không bỏ
+        if (text.length >= 3 && text[text.length - 2] === "\\") break;
+        text = text.slice(1, -1);
+        layersStripped++;
+      }
+    }
+  } while (text !== prev);
+
+  if (layersStripped > 0) {
+    result.payload = text;
+    result.mode = "outer-strip";
+    result.details.push(`Bỏ ${layersStripped} lớp nháy bao quanh`);
+    return result;
+  }
+
+  // Bước 5: Fallback — bỏ nháy ở giữa nếu payload vẫn còn nháy
+  if (/['"`]/.test(text)) {
+    // Loại bỏ tất cả nháy đơn giản nếu text có vẻ là hex/base64 với nháy xen kẽ
+    const stripped = text.replace(/['"`]/g, "");
+    if (stripped.length >= 20 && /^[0-9a-fA-F]+$/.test(stripped.replace(/\s/g, ""))) {
+      result.payload = stripped;
+      result.mode = "remove-all-quotes";
+      result.details.push("Loại bỏ tất cả dấu nháy xen kẽ");
+      return result;
+    }
+  }
+
+  return result;
+}
+
+// ==================== ESCAPE-AWARE DECODER ====================
+/**
+ * Decode escape sequences trong chuỗi hex/base64
+ * Hỗ trợ: \x41, \u0041, \\, \n, \r, \t, \', \"
+ */
+function unescapeString(s) {
+  return s
+    .replace(/\\x([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/\\n/g, "\n")
+    .replace(/\\r/g, "\r")
+    .replace(/\\t/g, "\t")
+    .replace(/\\b/g, "\b")
+    .replace(/\\f/g, "\f")
+    .replace(/\\v/g, "\v")
+    .replace(/\\0/g, "\0")
+    .replace(/\\'/g, "'")
+    .replace(/\\"/g, '"')
+    .replace(/\\`/g, "`")
+    .replace(/\\\\/g, "\\");
+}
+
+// ==================== SCORE ====================
+function scoreText(s) {
+  if (!s || s.length === 0) return 0;
+  let score = 0;
+  const len = s.length;
+  let printable = 0, letters = 0, digits = 0, spaces = 0;
+  let vietnamese = 0, control = 0, weird = 0;
+
+  for (let i = 0; i < len; i++) {
+    const c = s.charCodeAt(i);
+    if (c >= 32 && c < 127) printable++;
+    if ((c >= 65 && c <= 90) || (c >= 97 && c <= 122)) letters++;
+    if (c >= 48 && c <= 57) digits++;
+    if (c === 32 || c === 10 || c === 13 || c === 9) spaces++;
+    if (c >= 0x00C0 && c <= 0x1EF9) vietnamese++;
+    if (c < 9 || (c > 13 && c < 32)) control++;
+    if (c >= 0x80 && c < 0x00C0) weird++;
+  }
+
+  score += (printable / len) * 40;
+  const letterRatio = letters / len;
+  if (letterRatio > 0.35 && letterRatio < 0.85) score += 20;
+  else if (letterRatio >= 0.85) score += 10;
+  const spaceRatio = spaces / len;
+  if (spaceRatio > 0.03 && spaceRatio < 0.35) score += 10;
+  score += Math.min(vietnamese / len * 50, 10);
+  score -= (control / len) * 50;
+  score -= Math.min((weird / len) * 20, 15);
+
+  const lower = s.toLowerCase();
+  const keywords = [
+    'the ', 'and ', 'for ', 'this ', 'that ', 'with ', 'from ',
+    '#!/system/bin', '#!/bin/bash', '#!/bin/sh', 'echo ', 'export ',
+    'setprop', 'getprop', 'proc/', 'sys/', 'chmod ', 'rm -', 'cp ',
+    '<?xml', '<html', '<div', 'function', 'return', 'var ', 'const ',
+    'hello', 'world', 'test', 'android', 'layout', 'padding',
+    'package', 'import', 'public', 'private', 'class', 'def '
+  ];
+  for (const w of keywords) if (lower.includes(w)) score += 3;
+
+  if (/^#!/.test(s)) score += 15;
+  if (/\$\w+|\$\{/.test(s)) score += 10;
+  if (/(echo|printf|setprop|getprop|if \[|fi|for |done|while )/.test(s)) score += 20;
+
+  if (/<\?xml|<\w+[^>]*>|<\/\w+>/.test(s)) score += 20;
+  if (/[{};]/.test(s) && /(function|var|const|let|def|class|return)/.test(s)) score += 15;
+  if (/^[\w\s.,!?;:'"()\-]+$/.test(s) && s.length > 10) score += 10;
+  const digitRatio = digits / len;
+  if (digitRatio > 0.7) score -= 25;
+
+  return Math.max(0, Math.min(100, score));
+}
+
+// ==================== HELPERS ====================
+function base64ToBytes(b64) {
+  const bin = atob(b64.replace(/\s/g, "").replace(/-/g, "+").replace(/_/g, "/"));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+function bytesToLatin1(bytes) {
+  let s = "";
+  const CHUNK = 8192;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    s += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+  }
+  return s;
+}
+function latin1ToBytes(s) {
+  const bytes = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) bytes[i] = s.charCodeAt(i) & 0xFF;
+  return bytes;
+}
+
+// ==================== DECODERS ====================
+// ===== v3.1b helpers =====
+let CTX_KEYS = [];
+function collectKeys(text, extra) {
+  const ks = new Set();
+  if (extra) ks.add(extra);
+  const re1 = /\b\w*(?:key|KEY|Key|secret|SECRET|pass|PASS)\w*\s*=\s*(['"`])([^'"`\n]{2,64})\1/g;
+  let m; while ((m = re1.exec(text))) ks.add(m[2]);
+  const re2 = /(['"`])([A-Za-z0-9_@#!-]{4,24})\1/g;
+  while ((m = re2.exec(text)) && ks.size < 20) if (!/^[0-9a-f]{16,}$/i.test(m[2])) ks.add(m[2]);
+  return [...ks];
+}
+function ctxKeys() { return CTX_KEYS; }
+function xorKey(raw, key) {
+  let o = "";
+  for (let i = 0; i < raw.length; i++) o += String.fromCharCode((raw.charCodeAt(i) & 255) ^ key.charCodeAt(i % key.length));
+  return o;
+}
+function cleanB64(t) { return t.length >= 16 && /^[A-Za-z0-9+\/=\r\n]+$/.test(t); }
+
+const Detectors = {
+
+  // ============ v3.1c: LOADER S-BOX + XOR (mảng số thập phân trong shell/awk) ============
+  sboxLoader(text) {
+    // Tìm các biến NAME="12,34,..." → payload (dài nhất), sbox (hoán vị 256), key (ngắn) hoặc key DẪN XUẤT
+    // (set -- "a" "b" ...; _ORD="3,0,..." → ghép theo thứ tự → md5/sha1/sha256 → byte key)
+    const re = /\b[A-Za-z_][A-Za-z0-9_]*\s*=\s*(['"`])(\d{1,3}(?:\s*,\s*\d{1,3}){2,})\1/g;
+    const lists = []; let m;
+    while ((m = re.exec(text))) lists.push(m[2].split(",").map(x => +x.trim()));
+    if (lists.length < 2) return { match: "no", confidence: 0, reason: "Không có mảng số" };
+    lists.sort((a, b) => b.length - a.length);
+    const P = lists[0];
+    const S = lists.find(l => l !== P && l.length === 256 && new Set(l).size === 256);
+    if (!S) return { match: "no", confidence: 0, reason: "Không thấy S-box 256" };
+    const small = lists.filter(l => l !== P && l !== S && l.length >= 2 && l.length <= 64);
+    // khóa dẫn xuất từ các mảnh rải rác
+    const parts = []; const pm = text.match(/\bset\s+--\s+((?:(["'])[^"']*\2\s*)+)/);
+    if (pm) { const r2 = /(["'])([^"']*)\1/g; let q; while ((q = r2.exec(pm[1]))) parts.push(q[2]); }
+    const isOrd = l => parts.length > 1 && l.length === parts.length && [...l].sort((x, y) => x - y).every((v, i) => v === i);
+    const ord = small.find(isOrd);
+    const keys = small.filter(l => l !== ord).map(l => ({ label: `khóa ${l.length} byte`, k: l }));
+    if (parts.length > 1) {
+      const pass = [ord ? ord.map(i => parts[i]).join("") : null, parts.join(""), parts.join(" ")].filter(x => x !== null);
+      const hs = [];
+      if (/md5/i.test(text) || !/sha/i.test(text)) hs.push(["md5", x => CryptoJS.MD5(x)]);
+      if (/sha1/i.test(text)) hs.push(["sha1", x => CryptoJS.SHA1(x)]);
+      if (/sha256/i.test(text)) hs.push(["sha256", x => CryptoJS.SHA256(x)]);
+      for (const ps of pass) for (const [hn, hf] of hs) {
+        const hex = hf(ps).toString(); const k = [];
+        for (let i = 0; i < hex.length; i += 2) k.push(parseInt(hex.substr(i, 2), 16));
+        keys.push({ label: `${hn}("${ps}")`, k });
+      }
+    }
+    if (!keys.length) keys.push({ label: "không khóa", k: null });
+    const inv = new Array(256); S.forEach((v, i) => { inv[v] = i; });
+    let best = null;
+    for (const kk of keys) for (const rev of [true, false]) for (const table of [S, inv]) {
+      const seq = rev ? [...P].reverse() : P;
+      let out = "";
+      for (let i = 0; i < seq.length; i++) {
+        let b = table[seq[i] & 255];
+        if (b === undefined) { out = null; break; }
+        if (kk.k) b ^= kk.k[i % kk.k.length];
+        out += String.fromCharCode(b & 255);
+      }
+      if (out === null || !mostlyPrintable(out)) continue;
+      const sc = scoreText(out.slice(0, 2000));
+      if (!best || sc > best.sc) best = { out, sc, rev, inv: table === inv, label: kk.label };
+    }
+    if (!best || best.sc < 30) return { match: "no", confidence: 0, reason: "Không tổ hợp nào ra văn bản" };
+    return { match: "match", confidence: 90, output: best.out, reason: `S-box${best.inv ? " nghịch" : ""} + XOR ${best.label}${best.rev ? ", đọc ngược" : ""}` };
+  },
+
+  // ============ v3.1b: PAYLOAD / CAESAR-HEX / ROLLING XOR ============
+  shellPayload(text) {
+    // Tách chuỗi payload dài (hex/base64) ra khỏi wrapper shell: F='....'
+    const re = /\b[A-Za-z_][A-Za-z0-9_]*\s*=\s*(['"`])([A-Za-z0-9+\/=\s]{64,})\1/g;
+    let m, best = "";
+    while ((m = re.exec(text))) { const v = m[2].replace(/\s/g, ""); if (v.length > best.length) best = v; }
+    if (!best || text.length < best.length + 40) return { match: "no", confidence: 0, reason: "Không có wrapper" };
+    return { match: "match", confidence: 85, output: best, reason: `Payload ${best.length} ký tự` };
+  },
+  caesarHex(text) {
+    // Dịch vòng các chữ số hex (0-9a-f, 16 ký tự) — thử mọi shift, chỉ nhận shift cho ra dữ liệu hợp lý
+    const t = text.trim();
+    if (t.length < 16 || t.length % 2 || !/^[0-9a-f]+$/.test(t)) return { match: "no", confidence: 0, reason: "Không phải hex thường" };
+    const D = "0123456789abcdef", keys = ctxKeys(""), head = t.slice(0, 400);
+    for (let sh = 1; sh < 16; sh++) {
+      const dec = s => s.replace(/./g, c => D[(D.indexOf(c) + sh) % 16]);
+      const h = dec(head); let raw = "";
+      for (let i = 0; i < h.length; i += 2) raw += String.fromCharCode(parseInt(h.substr(i, 2), 16));
+      let ok = mostlyPrintable(raw) && scoreText(raw) >= 40;
+      if (!ok) ok = keys.some(k => cleanB64(xorKey(raw, k)));
+      if (ok) return { match: "match", confidence: 75, output: dec(t), reason: `Caesar hex shift +${sh} (undo -${16 - sh})` };
+    }
+    return { match: "no", confidence: 0, reason: "Không có shift hợp lý" };
+  },
+  hexXorKey(text) {
+    // hex → bytes → XOR khóa lặp (khóa lấy từ chính file: KEY="...", hoặc ô Key crypto)
+    const t = text.trim().replace(/\s/g, "");
+    if (t.length < 16 || t.length % 2 || !/^[0-9a-fA-F]+$/.test(t)) return { match: "no", confidence: 0, reason: "Không phải hex" };
+    let raw = "";
+    for (let i = 0; i < t.length; i += 2) raw += String.fromCharCode(parseInt(t.substr(i, 2), 16));
+    for (const k of ctxKeys("")) {
+      const out = xorKey(raw, k);
+      if (cleanB64(out.slice(0, 600)) || mostlyPrintable(out.slice(0, 600)) && scoreText(out.slice(0, 600)) > 40)
+        return { match: "match", confidence: 85, output: out, reason: `XOR khóa lặp "${k}"` };
+    }
+    return { match: "no", confidence: 0, reason: "Không khóa nào khớp" };
+  },
+
+  // ============ v3.1: XOR 1 BYTE ============
+  hexXor(text) {
+    // hex → bytes → XOR 1 byte (vd: hex(XOR 0x5A ...)); tự tìm hex trong wrapper F='...'
+    let hexStr = null;
+    const re = /\b[A-Za-z_][A-Za-z0-9_]*\s*=\s*(['"`])([0-9a-fA-F\s]{16,})\1/g;
+    let m, bestLen = 0;
+    while ((m = re.exec(text))) { const h = m[2].replace(/\s/g, ""); if (h.length > bestLen) { bestLen = h.length; hexStr = h; } }
+    if (!hexStr) { const t = text.trim().replace(/\s/g, "").replace(/^0x/i, ""); if (/^[0-9a-fA-F]{16,}$/.test(t)) hexStr = t; }
+    if (!hexStr || hexStr.length % 2) return { match: "no", confidence: 0, reason: "Không có hex" };
+    let raw = "";
+    for (let i = 0; i < hexStr.length; i += 2) raw += String.fromCharCode(parseInt(hexStr.substr(i, 2), 16));
+    return Detectors.xorByte(raw, "hex → ");
+  },
+  xorByte(text, prefix) {
+    if (text.length < 8) return { match: "no", confidence: 0, reason: "Quá ngắn" };
+    const n = Math.min(text.length, 4000);
+    let bestK = -1, bestV = -1;
+    for (let k = 1; k < 256; k++) {
+      let p = 0, tok = 0, sample = "";
+      for (let i = 0; i < n; i++) {
+        const c = (text.charCodeAt(i) & 255) ^ k;
+        if ((c >= 32 && c < 127) || c === 10 || c === 13 || c === 9) p++;
+        if ((c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 43 || c === 47 || c === 61 || c === 10 || c === 13) tok++;
+        if (i < 600) sample += String.fromCharCode(c);
+      }
+      if (p / n < 0.97) continue;
+      // ưu tiên key cho ra chuỗi base64/hex sạch, sau đó tới điểm văn bản
+      const v = (tok / n >= 0.99 ? 1000 : 0) + scoreText(sample);
+      if (v > bestV) { bestV = v; bestK = k; }
+    }
+    if (bestK < 0) return { match: "no", confidence: 0, reason: "Không có key XOR hợp lý" };
+    let out = "";
+    for (let i = 0; i < text.length; i++) out += String.fromCharCode((text.charCodeAt(i) & 255) ^ bestK);
+    return { match: "match", confidence: 80, output: out, reason: `${prefix || ""}XOR key 0x${bestK.toString(16).toUpperCase().padStart(2, "0")} (${bestK})` };
+  },
+
+  // ============ QUOTE-AWARE (v3 MỚI) ============
+  quotedHex(text) {
+    // Nhận diện hex BẤT KỲ khi có dấu nháy
+    // VD: '48656c6c6f', "48656c6c6f", \x48\x65...
+    // Bước 1: Trích xuất payload (bỏ nháy)
+    const extract = quoteAwareExtract(text);
+    let payload = extract.payload;
+
+    // Bước 2: Nếu payload có escape (\x, \u) → unescape
+    if (/\\x[0-9a-fA-F]{2}|\\u[0-9a-fA-F]{4}/.test(payload)) {
+      payload = unescapeString(payload);
+    }
+
+    // Bước 3: Kiểm tra có phải hex không (sau khi bỏ nháy)
+    const t = payload.replace(/\s/g, "").replace(/^0x/i, "");
+    if (!/^[0-9a-fA-F]+$/.test(t) || t.length < 4 || t.length % 2 !== 0) {
+      return { match: "no", confidence: 0, reason: "Không phải hex sau khi bỏ nháy" };
+    }
+
+    try {
+      let result = "";
+      for (let i = 0; i < t.length; i += 2) result += String.fromCharCode(parseInt(t.substr(i, 2), 16));
+      let utf8 = result;
+      try { utf8 = decodeURIComponent(escape(result)); } catch (e) {}
+      const sc = scoreText(utf8);
+
+      // Nếu output là chuỗi "số,số,số" → đây là charcode hex
+      if (/^\d+([,\s]+\d+){3,}/.test(utf8)) {
+        // Đệ quy: decode charcode
+        const nums = utf8.match(/\d+/g) || [];
+        const chars = nums.filter(n => {
+          const v = parseInt(n);
+          return v > 0 && v <= 0x10FFFF;
+        }).map(n => String.fromCodePoint(parseInt(n)));
+        const final = chars.join("");
+        const finalScore = scoreText(final);
+        return {
+          match: "match",
+          confidence: 98,
+          output: final,
+          reason: `Quote-aware hex → charcode (${nums.length} số) → text (score ${finalScore.toFixed(0)}) [mode: ${extract.mode}]`
+        };
+      }
+
+      if (sc < 20) return { match: "maybe", confidence: 40, reason: `Quote-aware hex OK nhưng score ${sc.toFixed(0)}` };
+      return {
+        match: "match",
+        confidence: 95,
+        output: utf8,
+        reason: `Quote-aware hex (${t.length/2} bytes, mode: ${extract.mode}, score ${sc.toFixed(0)})`
+      };
+    } catch (e) {
+      return { match: "no", confidence: 0, reason: e.message };
+    }
+  },
+
+  quotedBase64(text) {
+    // Nhận diện base64 khi có dấu nháy
+    const extract = quoteAwareExtract(text);
+    let payload = extract.payload;
+    if (/\\x[0-9a-fA-F]{2}|\\u[0-9a-fA-F]{4}/.test(payload)) {
+      payload = unescapeString(payload);
+    }
+
+    const t = payload.trim().replace(/\s/g, "");
+    if (t.length < 8) return { match: "no", confidence: 0, reason: "Quá ngắn" };
+    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(t)) return { match: "no", confidence: 0, reason: "Không phải base64 sau khi bỏ nháy" };
+
+    try {
+      let t2 = t;
+      if (t2.length % 4 !== 0) t2 += "=".repeat((4 - t2.length % 4) % 4);
+      const decoded = atob(t2);
+      const sc = scoreText(decoded);
+      if (sc < 20) return { match: "maybe", confidence: 40, reason: `Quote-aware b64 OK nhưng score ${sc.toFixed(0)}` };
+      return {
+        match: "match",
+        confidence: 95,
+        output: decoded,
+        reason: `Quote-aware Base64 (mode: ${extract.mode}, score ${sc.toFixed(0)})`
+      };
+    } catch (e) { return { match: "no", confidence: 0, reason: e.message }; }
+  },
+
+  quotedShellPrintf(text) {
+    // Nhận diện toàn bộ file shell có dấu nháy
+    // VD: H='33352c...'; C=$(printf...); awk...
+    // Trích xuất payload từ wrapper H='...'
+    const wrapperMatch = text.match(/\b([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(['"`])([^'"`]*?)\2/);
+    if (!wrapperMatch) {
+      // Fallback: dùng quoteAwareExtract
+      const extract = quoteAwareExtract(text);
+      if (extract.mode === "raw") return { match: "no", confidence: 0, reason: "Không có wrapper shell" };
+      return Detectors.quotedHex(extract.payload);
+    }
+
+    const varName = wrapperMatch[1];
+    const varValue = wrapperMatch[3];
+    const cleanValue = varValue.replace(/\s/g, "");
+
+    // Chỉ xử lý nếu giá trị là hex dài
+    if (!/^[0-9a-fA-F]+$/.test(cleanValue) || cleanValue.length < 40) {
+      return { match: "no", confidence: 0, reason: `Wrapper ${varName}='...' không phải hex dài` };
+    }
+
+    try {
+      // Hex → text
+      let decoded = "";
+      for (let i = 0; i < cleanValue.length; i += 2) {
+        decoded += String.fromCharCode(parseInt(cleanValue.substr(i, 2), 16));
+      }
+
+      // Nếu output là "số,số,số" → decode charcode
+      if (/^\d+([,\s]+\d+){3,}/.test(decoded)) {
+        const nums = decoded.match(/\d+/g) || [];
+        const chars = nums.filter(n => {
+          const v = parseInt(n);
+          return v > 0 && v <= 0x10FFFF;
+        }).map(n => String.fromCodePoint(parseInt(n)));
+        const final = chars.join("");
+        const finalScore = scoreText(final);
+
+        return {
+          match: "match",
+          confidence: 98,
+          output: final,
+          reason: `Shell wrapper ${varName}='hex' → charcode (${nums.length} số) → text (score ${finalScore.toFixed(0)})`
+        };
+      }
+
+      // Không phải charcode → trả về text thường
+      const sc = scoreText(decoded);
+      if (sc < 20) return { match: "maybe", confidence: 40, reason: `Wrapper OK nhưng score ${sc.toFixed(0)}` };
+      return {
+        match: "match",
+        confidence: 90,
+        output: decoded,
+        reason: `Shell wrapper ${varName}='hex' → text (score ${sc.toFixed(0)})`
+      };
+    } catch (e) {
+      return { match: "no", confidence: 0, reason: e.message };
+    }
+  },
+
+  quotedCharcode(text) {
+    // Nhận diện charcode có dấu nháy: '72,101,108,108,111' hoặc "72 101 108"
+    const extract = quoteAwareExtract(text);
+    const payload = extract.payload.trim();
+
+    // Kiểm tra có phải chuỗi số
+    if (!/^\d+([,\s]+\d+){3,}$/.test(payload)) {
+      return { match: "no", confidence: 0, reason: "Không phải charcode sau khi bỏ nháy" };
+    }
+
+    const nums = payload.match(/\d+/g) || [];
+    const valid = nums.filter(n => {
+      const v = parseInt(n);
+      return v > 0 && v <= 0x10FFFF;
+    });
+    if (valid.length !== nums.length) return { match: "no", confidence: 0, reason: "Số ngoài Unicode" };
+
+    const decoded = valid.map(n => String.fromCodePoint(parseInt(n))).join("");
+    const sc = scoreText(decoded);
+    if (sc < 20) return { match: "maybe", confidence: 40, reason: `Charcode OK nhưng score ${sc.toFixed(0)}` };
+    return {
+      match: "match",
+      confidence: 95,
+      output: decoded,
+      reason: `Quote-aware charcode (${valid.length} số, mode: ${extract.mode}, score ${sc.toFixed(0)})`
+    };
+  },
+
+  // ============ SHELL WRAPPER ============
+  shellPrintfCharcode(text) {
+    // Input đã được xử lý bởi quotedShellPrintf
+    // Fallback: nếu input là hex thuần
+    const t = text.trim().replace(/\s/g, "");
+    if (!/^[0-9a-fA-F]+$/.test(t) || t.length < 20 || t.length % 2 !== 0) {
+      return { match: "no", confidence: 0, reason: "Không phải hex thuần" };
+    }
+    try {
+      let decoded = "";
+      for (let i = 0; i < t.length; i += 2) decoded += String.fromCharCode(parseInt(t.substr(i, 2), 16));
+      if (!/^\d+([,\s]+\d+){3,}/.test(decoded)) return { match: "no", confidence: 0, reason: "Hex không ra chuỗi số" };
+      const nums = decoded.match(/\d+/g) || [];
+      const chars = nums.filter(n => {
+        const v = parseInt(n);
+        return v > 0 && v <= 0x10FFFF;
+      }).map(n => String.fromCodePoint(parseInt(n)));
+      const final = chars.join("");
+      const sc = scoreText(final);
+      if (sc < 30) return { match: "maybe", confidence: 50, reason: `Hex→charcode OK nhưng score ${sc.toFixed(0)}` };
+      return {
+        match: "match",
+        confidence: 98,
+        output: final,
+        reason: `Hex (${t.length}) → charcode (${nums.length} số) → text (score ${sc.toFixed(0)})`
+      };
+    } catch (e) { return { match: "no", confidence: 0, reason: e.message }; }
+  },
+
+  // ============ BASE ENCODINGS ============
+  base64(text) {
+    const t = text.trim().replace(/\s/g, "");
+    if (t.length < 4) return { match: "no", confidence: 0, reason: "Quá ngắn" };
+    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(t)) return { match: "no", confidence: 0, reason: "Ký tự không hợp lệ" };
+    if (t.length % 4 !== 0) return { match: "maybe", confidence: 40, reason: "Độ dài % 4 ≠ 0" };
+    try {
+      const decoded = atob(t);
+      const sc = scoreText(decoded);
+      if (sc < 20) return { match: "maybe", confidence: 30, reason: `Score ${sc.toFixed(0)}` };
+      return { match: "match", confidence: 95, output: decoded, reason: `Base64 (score ${sc.toFixed(0)})` };
+    } catch (e) { return { match: "no", confidence: 0, reason: e.message }; }
+  },
+
+  base64url(text) {
+    const t = text.trim().replace(/\s/g, "");
+    if (!/^[A-Za-z0-9_-]+={0,2}$/.test(t)) return { match: "no", confidence: 0, reason: "Không có - _" };
+    if (t.length < 4) return { match: "no", confidence: 0, reason: "Quá ngắn" };
+    try {
+      let t2 = t.replace(/-/g, "+").replace(/_/g, "/");
+      t2 += "=".repeat((4 - t2.length % 4) % 4);
+      const decoded = atob(t2);
+      const sc = scoreText(decoded);
+      if (sc < 20) return { match: "maybe", confidence: 40, reason: `Score ${sc.toFixed(0)}` };
+      return { match: "match", confidence: 90, output: decoded, reason: `Base64URL` };
+    } catch (e) { return { match: "no", confidence: 0, reason: e.message }; }
+  },
+
+  base32(text) {
+    const t = text.trim().replace(/\s/g, "").toUpperCase().replace(/=+$/, "");
+    if (t.length < 8) return { match: "no", confidence: 0, reason: "Quá ngắn" };
+    if (!/^[A-Z2-7]+$/.test(t)) return { match: "no", confidence: 0, reason: "Ký tự ngoài A-Z, 2-7" };
+    try {
+      const alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+      let bits = "";
+      for (const c of t) bits += alpha.indexOf(c).toString(2).padStart(5, "0");
+      const bytes = [];
+      for (let i = 0; i + 8 <= bits.length; i += 8) bytes.push(parseInt(bits.substr(i, 8), 2));
+      const decoded = new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(bytes));
+      const sc = scoreText(decoded);
+      if (sc < 20) return { match: "maybe", confidence: 30, reason: `Score ${sc.toFixed(0)}` };
+      return { match: "match", confidence: 85, output: decoded, reason: `Base32` };
+    } catch (e) { return { match: "no", confidence: 0, reason: e.message }; }
+  },
+
+  base58(text) {
+    const t = text.trim();
+    if (!/^[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]+$/.test(t)) return { match: "no", confidence: 0, reason: "Không phải Base58" };
+    if (t.length < 6) return { match: "no", confidence: 0, reason: "Quá ngắn" };
+    try {
+      const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+      let num = 0n;
+      for (const c of t) num = num * 58n + BigInt(alphabet.indexOf(c));
+      let hex = num.toString(16);
+      if (hex.length % 2) hex = "0" + hex;
+      let decoded = "";
+      for (let i = 0; i < hex.length; i += 2) decoded += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+      const sc = scoreText(decoded);
+      if (sc < 20) return { match: "maybe", confidence: 40, reason: `Score ${sc.toFixed(0)}` };
+      return { match: "match", confidence: 80, output: decoded, reason: `Base58` };
+    } catch (e) { return { match: "no", confidence: 0, reason: e.message }; }
+  },
+
+  base85(text) {
+    const t = text.trim();
+    if (t.length < 5) return { match: "no", confidence: 0, reason: "Quá ngắn" };
+    if (!/^[\x21-\x75]+$/.test(t)) return { match: "no", confidence: 0, reason: "Ký tự ngoài !-u" };
+    if (t.length % 5 !== 0) return { match: "maybe", confidence: 30, reason: "Độ dài % 5 ≠ 0" };
+    try {
+      let result = [];
+      for (let i = 0; i < t.length; i += 5) {
+        let chunk = t.substr(i, 5);
+        let num = 0n;
+        for (const c of chunk) num = num * 85n + BigInt(c.charCodeAt(0) - 33);
+        const bytes = [];
+        for (let j = 3; j >= 0; j--) bytes.push(Number((num >> BigInt(j * 8)) & 0xFFn));
+        result.push(...bytes);
+      }
+      let decoded = String.fromCharCode(...result).replace(/\0/g, "");
+      const sc = scoreText(decoded);
+      if (sc < 20) return { match: "maybe", confidence: 40, reason: `Score ${sc.toFixed(0)}` };
+      return { match: "match", confidence: 80, output: decoded, reason: `ASCII85` };
+    } catch (e) { return { match: "no", confidence: 0, reason: e.message }; }
+  },
+
+  // ============ NUMERIC ============
+  hex(text) {
+    const t = text.trim().replace(/\s/g, "").replace(/^0x/i, "").replace(/\\x/gi, "");
+    if (t.length < 4) return { match: "no", confidence: 0, reason: "Quá ngắn" };
+    if (!/^[0-9a-fA-F]+$/.test(t)) return { match: "no", confidence: 0, reason: "Không phải hex" };
+    if (t.length % 2 !== 0) return { match: "maybe", confidence: 40, reason: "Độ dài lẻ" };
+    try {
+      let result = "";
+      for (let i = 0; i < t.length; i += 2) result += String.fromCharCode(parseInt(t.substr(i, 2), 16));
+      let utf8 = result;
+      try { utf8 = decodeURIComponent(escape(result)); } catch (e) {}
+      const sc = scoreText(utf8);
+      if (sc < 20) return { match: "maybe", confidence: 35, reason: `Score ${sc.toFixed(0)}` };
+      return { match: "match", confidence: 95, output: utf8, reason: `Hex ${t.length/2} bytes` };
+    } catch (e) { return { match: "no", confidence: 0, reason: e.message }; }
+  },
+
+  binary(text) {
+    const parts = text.trim().split(/\s+/);
+    if (parts.length < 3) return { match: "no", confidence: 0, reason: "Cần 3+ nhóm" };
+    if (!parts.every(p => /^[01]{8}$/.test(p))) return { match: "no", confidence: 0, reason: "Không phải 8-bit" };
+    const decoded = parts.map(p => String.fromCharCode(parseInt(p, 2))).join("");
+    return { match: "match", confidence: 95, output: decoded, reason: `${parts.length} nhóm` };
+  },
+
+  binary_no_space(text) {
+    const t = text.trim().replace(/\s/g, "");
+    if (!/^[01]+$/.test(t)) return { match: "no", confidence: 0, reason: "Không phải binary" };
+    if (t.length % 8 !== 0) return { match: "maybe", confidence: 30, reason: "Độ dài % 8 ≠ 0" };
+    if (t.length < 24) return { match: "no", confidence: 0, reason: "Quá ngắn" };
+    let decoded = "";
+    for (let i = 0; i < t.length; i += 8) decoded += String.fromCharCode(parseInt(t.substr(i, 8), 2));
+    const sc = scoreText(decoded);
+    if (sc < 20) return { match: "maybe", confidence: 40, reason: `Score ${sc.toFixed(0)}` };
+    return { match: "match", confidence: 85, output: decoded, reason: `Binary no-space` };
+  },
+
+  octal(text) {
+    const parts = text.trim().split(/\s+/);
+    if (parts.length < 3) return { match: "no", confidence: 0, reason: "Cần 3+ nhóm" };
+    if (!parts.every(p => /^[0-7]{2,3}$/.test(p))) return { match: "no", confidence: 0, reason: "Không phải octal" };
+    const decoded = parts.map(p => String.fromCharCode(parseInt(p, 8))).join("");
+    const sc = scoreText(decoded);
+    if (sc < 20) return { match: "maybe", confidence: 40, reason: `Score ${sc.toFixed(0)}` };
+    return { match: "match", confidence: 85, output: decoded, reason: `${parts.length} nhóm octal` };
+  },
+
+  decimal(text) {
+    const parts = text.trim().split(/[\s,]+/);
+    if (parts.length < 3) return { match: "no", confidence: 0, reason: "Cần 3+ số" };
+    if (!parts.every(p => /^\d{1,3}$/.test(p))) return { match: "no", confidence: 0, reason: "Không phải 1-3 chữ số" };
+    const nums = parts.map(Number);
+    if (!nums.every(n => n <= 255)) return { match: "no", confidence: 0, reason: "Có số > 255" };
+    const decoded = nums.map(n => String.fromCharCode(n)).join("");
+    const sc = scoreText(decoded);
+    if (sc < 20) return { match: "maybe", confidence: 40, reason: `Score ${sc.toFixed(0)}` };
+    return { match: "match", confidence: 85, output: decoded, reason: `${parts.length} số 0-255` };
+  },
+
+  charcode(text) {
+    const nums = text.match(/\d+/g) || [];
+    if (nums.length < 3) return { match: "no", confidence: 0, reason: "Cần 3+ số" };
+    const valid = nums.filter(n => parseInt(n) > 0 && parseInt(n) <= 0x10FFFF);
+    if (valid.length !== nums.length) return { match: "no", confidence: 0, reason: "Số ngoài Unicode" };
+    const decoded = valid.map(n => String.fromCodePoint(parseInt(n))).join("");
+    const sc = scoreText(decoded);
+    if (sc < 20) return { match: "maybe", confidence: 35, reason: `Score ${sc.toFixed(0)}` };
+    return { match: "match", confidence: 80, output: decoded, reason: `${valid.length} số` };
+  },
+
+  charcodeComma(text) {
+    if (!/^\s*\d+(\s*,\s*\d+){3,}\s*$/.test(text.trim())) return { match: "no", confidence: 0, reason: "Không có dấu phẩy" };
+    const nums = text.match(/\d+/g) || [];
+    const decoded = nums.map(n => String.fromCodePoint(parseInt(n))).join("");
+    const sc = scoreText(decoded);
+    if (sc < 20) return { match: "maybe", confidence: 40, reason: `Score ${sc.toFixed(0)}` };
+    return { match: "match", confidence: 90, output: decoded, reason: `Charcode có dấu phẩy (${nums.length})` };
+  },
+
+  // ============ ESCAPE ============
+  url(text) {
+    const urlCount = (text.match(/%[0-9A-Fa-f]{2}/g) || []).length;
+    if (urlCount === 0) return { match: "no", confidence: 0, reason: "Không có %XX" };
+    try {
+      const decoded = decodeURIComponent(text);
+      const sc = scoreText(decoded);
+      if (sc < 20) return { match: "maybe", confidence: 40, reason: `Score ${sc.toFixed(0)}` };
+      return { match: "match", confidence: Math.min(60 + urlCount * 5, 98), output: decoded, reason: `${urlCount} mã %XX` };
+    } catch (e) { return { match: "maybe", confidence: 30, reason: "Decode lỗi" }; }
+  },
+
+  unicode(text) {
+    const u = text.match(/\\u[0-9a-fA-F]{4}/g) || [];
+    const x = text.match(/\\x[0-9a-fA-F]{2}/g) || [];
+    const h = text.match(/&#x?[0-9a-fA-F]+;/gi) || [];
+    const total = u.length + x.length + h.length;
+    if (total === 0) return { match: "no", confidence: 0, reason: "Không có escape" };
+    const decoded = text
+      .replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+      .replace(/\\x([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+      .replace(/&#x([0-9a-fA-F]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
+      .replace(/&#(\d+);/g, (_, d) => String.fromCharCode(parseInt(d)));
+    return { match: "match", confidence: 95, output: decoded, reason: `${total} escape` };
+  },
+
+  // ============ COMPRESSION ============
+  gzip(text) {
+    try {
+      let bytes;
+      try { bytes = base64ToBytes(text.trim()); }
+      catch (e) { bytes = new TextEncoder().encode(text); }
+      if (bytes[0] !== 0x1F || bytes[1] !== 0x8B) return { match: "no", confidence: 0, reason: "Không có 1F 8B" };
+      const decompressed = pako.ungzip(bytes);
+      const decoded = new TextDecoder("utf-8", { fatal: false }).decode(decompressed);
+      return { match: "match", confidence: 100, output: decoded, reason: `Gzip` };
+    } catch (e) { return { match: "no", confidence: 0, reason: e.message }; }
+  },
+
+  zlib(text) {
+    try {
+      let bytes;
+      try { bytes = base64ToBytes(text.trim()); }
+      catch (e) { bytes = new TextEncoder().encode(text); }
+      if (bytes[0] !== 0x78) return { match: "no", confidence: 0, reason: "Không có header 78" };
+      const decompressed = pako.inflate(bytes);
+      const decoded = new TextDecoder("utf-8", { fatal: false }).decode(decompressed);
+      return { match: "match", confidence: 95, output: decoded, reason: `Zlib` };
+    } catch (e) { return { match: "no", confidence: 0, reason: e.message }; }
+  },
+
+  // ============ CLASSICAL ============
+  rot13(text) {
+    if (!/[a-zA-Z]/.test(text)) return { match: "no", confidence: 0, reason: "Không có chữ cái" };
+    const decoded = text.replace(/[a-zA-Z]/g, c =>
+      String.fromCharCode((c <= "Z" ? 90 : 122) >= (c = c.charCodeAt(0) + 13) ? c : c - 26)
+    );
+    return { match: "maybe", confidence: 50, output: decoded, reason: "ROT13" };
+  },
+
+  // ============ MODERN ============
+  jwt(text) {
+    const parts = text.trim().split(".");
+    if (parts.length !== 3) return { match: "no", confidence: 0, reason: "Không có 3 phần" };
+    try {
+      const header = JSON.parse(atob(parts[0].replace(/-/g, "+").replace(/_/g, "/")));
+      const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+      return { match: "match", confidence: 100, output: JSON.stringify({ header, payload }, null, 2), reason: `JWT alg=${header.alg}` };
+    } catch (e) { return { match: "maybe", confidence: 30, reason: "Không decode JSON" }; }
+  },
+
+  // ============ CRYPTO ============
+  crypto(text, key) {
+    if (!key) return { match: "no", confidence: 0, reason: "Chưa có key" };
+    const results = [];
+    for (const [algo, fn] of [
+      ["AES", CryptoJS.AES], ["DES", CryptoJS.DES],
+      ["TripleDES", CryptoJS.TripleDES], ["RC4", CryptoJS.RC4],
+      ["Rabbit", CryptoJS.Rabbit]
+    ]) {
+      try {
+        const bytes = fn.decrypt(text, key);
+        const result = bytes.toString(CryptoJS.enc.Utf8);
+        if (result && result.length > 0) {
+          const sc = scoreText(result);
+          if (sc > 20) results.push({ algo, result, score: sc });
+        }
+      } catch (e) {}
+    }
+    if (results.length === 0) return { match: "no", confidence: 0, reason: "Không decrypt được" };
+    results.sort((a, b) => b.score - a.score);
+    return { match: "match", confidence: 80 + Math.min(results[0].score / 5, 15), output: results[0].result, reason: `${results[0].algo}` };
+  },
+
+  encodingFix(text) {
+    const bytes = new Uint8Array(text.length);
+    for (let i = 0; i < text.length; i++) bytes[i] = text.charCodeAt(i) & 0xFF;
+    let best = null, bestScore = scoreText(text), bestEnc = "gốc";
+    for (const enc of ["utf-8", "utf-16le", "utf-16be", "windows-1252", "iso-8859-1"]) {
+      try {
+        const decoded = new TextDecoder(enc, { fatal: false }).decode(bytes);
+        const sc = scoreText(decoded);
+        if (sc > bestScore + 10) { bestScore = sc; best = decoded; bestEnc = enc; }
+      } catch (e) {}
+    }
+    if (!best) return { match: "no", confidence: 0, reason: "Không cải thiện" };
+    return { match: "match", confidence: 80, output: best, reason: `Fix ${bestEnc}` };
+  }
+};
+
+// ==================== DETECT ALL (QUOTE-AWARE) ====================
+function detectAll(text, cryptoKey) {
+  const names = [
+    "sboxLoader", "shellPayload", "hexXorKey", "caesarHex", "hexXor",
+    // Quote-aware (ưu tiên cao)
+    "quotedShellPrintf", "quotedHex", "quotedBase64", "quotedCharcode",
+    // Shell
+    "shellPrintfCharcode",
+    // Base encodings
+    "base64", "base64url", "base32", "base58", "base85",
+    // Numeric
+    "hex", "binary", "binary_no_space", "octal", "decimal", "charcode", "charcodeComma",
+    // Escape
+    "url", "unicode",
+    // Compression
+    "gzip", "zlib",
+    // Classical
+    "rot13",
+    // Modern
+    "jwt",
+    // Fix
+    "encodingFix"
+  ];
+
+  const results = [];
+  for (const name of names) {
+    let r;
+    try { r = Detectors[name](text); }
+    catch (e) { r = { match: "no", confidence: 0, reason: "Lỗi: " + e.message }; }
+    results.push({ name, ...r });
+  }
+  if (cryptoKey) results.push({ name: "crypto", ...Detectors.crypto(text, cryptoKey) });
+
+  const order = { match: 0, maybe: 1, no: 2 };
+  results.sort((a, b) => {
+    if (order[a.match] !== order[b.match]) return order[a.match] - order[b.match];
+    return b.confidence - a.confidence;
+  });
+  return results;
+}
+
+// ==================== MULTI-LAYER ====================
+function multiLayerDecode(initialText, options) {
+  const { maxLayers, minImprove, minScore, cryptoKey } = options;
+  CTX_KEYS = collectKeys(initialText, cryptoKey);
+  const chain = [];
+  let current = initialText;
+  let currentScore = scoreText(current);
+  chain.push({ layer: 0, method: "GỐC", text: current, score: currentScore, delta: 0 });
+
+  for (let layer = 1; layer <= maxLayers; layer++) {
+    const results = detectAll(current, cryptoKey);
+    // v3.1c: loader có S-box là bước cấu trúc chắc chắn → nhận luôn dù điểm văn bản không tăng (wrapper vốn đã "trông như text")
+    const forced = results.find(r => r.name === "sboxLoader" && r.match === "match" && r.output && r.output !== current);
+    if (forced) {
+      const fs_ = scoreText(forced.output);
+      chain.push({ layer, method: forced.name, text: forced.output, score: fs_, delta: fs_ - currentScore });
+      current = forced.output; currentScore = fs_;
+      continue;
+    }
+    const matches = results
+      .filter(r => (r.match === "match" || r.match === "maybe") && r.output && r.output !== current)
+      .map(r => ({ ...r, score: scoreText(r.output), delta: scoreText(r.output) - currentScore }))
+      .filter(r => r.score > currentScore + minImprove)
+      .sort((a, b) => b.score - a.score);
+
+    if (matches.length === 0) break;
+    const best = matches[0];
+    if (best.score < minScore && layer > 1) break;
+
+    chain.push({
+      layer, method: best.name, text: best.output,
+      score: best.score, delta: best.delta,
+      alternatives: matches.slice(1, 4).map(m => ({ method: m.name, score: m.score }))
+    });
+    current = best.output;
+    currentScore = best.score;
+  }
+  // v3.1: greedy bế tắc (vd: charcode → hex → reverse → base64) → tìm sâu, có thử đảo chuỗi
+  const deep = deepSearch(initialText, options);
+  if (deep && deep.score > currentScore + minImprove) {
+    return { chain: [chain[0], ...deep.chain], final: deep.text, finalScore: deep.score };
+  }
+  return { chain, final: current, finalScore: currentScore };
+}
+
+// ==================== v3.1: DEEP SEARCH (+ REVERSE) ====================
+function reverseStr(t) { return Array.from(t).reverse().join(""); }
+function mostlyPrintable(t) {
+  if (!t || t.length === 0) return false;
+  let ok = 0; const n = Math.min(t.length, 2000);
+  for (let i = 0; i < n; i++) { const c = t.charCodeAt(i); if ((c >= 32 && c < 127) || c === 9 || c === 10 || c === 13 || c > 159) ok++; }
+  return ok / n >= 0.9;
+}
+function deepSearch(initialText, options) {
+  const { maxLayers, cryptoKey } = options;
+  const WEAK = new Set(["rot13", "encodingFix", "url", "unicode"]);
+  const seen = new Set([initialText]);
+  const queue = [{ text: initialText, score: scoreText(initialText), chain: [] }];
+  let best = null, nodes = 0;
+  while (queue.length && nodes < 800) {
+    const node = queue.shift(); nodes++; // BFS → đường đi ngắn nhất, không dư bước
+    if (node.chain.length >= maxLayers) continue;
+    const single = /^\S+$/.test(node.text);
+    const rv = reverseStr(node.text);
+    const variants = [{ prefix: "", t: node.text }];
+    if (single) variants.push({ prefix: "reverse → ", t: rv });
+    else if (!seen.has(rv) && scoreText(rv) > node.score + 5) variants.push({ prefix: "", t: rv, plainReverse: true });
+    for (const v of variants) {
+      const add = (method, out) => {
+        seen.add(out);
+        const sc = scoreText(out);
+        const chain = [...node.chain, { layer: node.chain.length + 1, method, text: out, score: sc, delta: 0 }];
+        if (!best || sc > best.score) best = { text: out, score: sc, chain };
+        queue.push({ text: out, score: sc, chain });
+      };
+      if (v.plainReverse) { add("reverse", v.t); continue; }
+      let res;
+      try { res = detectAll(v.t, cryptoKey); } catch (e) { continue; }
+      for (const r of res) {
+        if (r.match === "no" || !r.output || typeof r.output !== "string") continue;
+        if (seen.has(r.output) || !mostlyPrintable(r.output)) continue;
+        if (WEAK.has(r.name) && scoreText(r.output) < node.score + 5) continue;
+        add(v.prefix + r.name, r.output);
+      }
+    }
+  }
+  if (best) { let prev = scoreText(initialText); best.chain.forEach(c => { c.delta = c.score - prev; prev = c.score; }); }
+  return best;
+}
+
+// ==================== TREE ====================
+function buildTree(text, options, maxDepth, minScore, maxNodes) {
+  let nodeCount = 0;
+  function build(txt, depth, path, visited) {
+    if (nodeCount >= maxNodes || depth > maxDepth) return null;
+    const node = { text: txt, score: scoreText(txt), depth, method: path.length === 0 ? "GỐC" : path[path.length - 1], children: [], isBest: false };
+    nodeCount++;
+    if (depth >= maxDepth) return node;
+    const results = detectAll(txt, options.cryptoKey);
+    const candidates = results
+      .filter(r => (r.match === "match" || r.match === "maybe") && r.output && r.output !== txt && typeof r.output === "string")
+      .map(r => ({ ...r, score: scoreText(r.output) }))
+      .filter(r => r.score >= minScore && r.score > node.score)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3);
+    for (const c of candidates) {
+      const key = c.output.substring(0, 100);
+      if (visited.has(key)) continue;
+      const nv = new Set(visited);
+      nv.add(key);
+      const child = build(c.output, depth + 1, [...path, c.name], nv);
+      if (child) node.children.push(child);
+    }
+    return node;
+  }
+  const tree = build(text, 0, [], new Set([text.substring(0, 100)]));
+  let bestNode = null, bestScore = -1;
+  function findBest(n) {
+    if (!n) return;
+    if (n.children.length === 0 && n.score > bestScore) { bestScore = n.score; bestNode = n; }
+    n.children.forEach(findBest);
+  }
+  findBest(tree);
+  function mark(n, t) {
+    if (n === t) { n.isBest = true; return true; }
+    for (const c of n.children) if (mark(c, t)) { n.isBest = true; return true; }
+    return false;
+  }
+  if (bestNode) mark(tree, bestNode);
+  return { tree, nodeCount, bestNode };
+}
+
+// ==================== FILE HANDLING ====================
+const TEXT_EXT = new Set(["txt","xml","html","htm","js","mjs","cjs","ts","jsx","tsx","css","scss","less","json","yaml","yml","toml","ini","cfg","md","markdown","csv","tsv","log","sh","bash","zsh","bat","ps1","py","java","kt","kts","c","cpp","h","hpp","cs","go","rs","rb","php","swift","dart","lua","r","sql","gradle","properties","pro","plist","strings","smali","vue","svelte","astro","svg","env"]);
+// ===== v3.2: APK — AXML (binary manifest) reader =====
+function parseAXML(buf) {
+  const d = new DataView(buf);
+  const u16 = o => d.getUint16(o, true), u32 = o => d.getUint32(o, true);
+  let o = 8;
+  if (u16(o) !== 0x0001) return "(Không đọc được AndroidManifest.xml nhị phân)";
+  const sp = o, cnt = u32(o + 8), flags = u32(o + 16), ss = u32(o + 20), sz = u32(o + 4);
+  const offs = []; for (let i = 0; i < cnt; i++) offs.push(u32(o + 28 + 4 * i));
+  const utf8 = flags & 0x100;
+  const dec8 = new TextDecoder("utf-8"), dec16 = new TextDecoder("utf-16le");
+  const bytes = new Uint8Array(buf);
+  function getstr(i) {
+    if (i === 0xFFFFFFFF || i >= cnt) return null;
+    let p = sp + ss + offs[i];
+    if (utf8) {
+      let b = bytes[p]; p += (b & 0x80) ? 2 : 1;
+      let l = bytes[p];
+      if (l & 0x80) { l = ((l & 0x7f) << 8) | bytes[p + 1]; p += 2; } else p += 1;
+      return dec8.decode(bytes.subarray(p, p + l));
+    }
+    let l = u16(p); p += 2;
+    if (l & 0x8000) { l = ((l & 0x7fff) << 16) | u16(p); p += 2; }
+    return dec16.decode(bytes.subarray(p, p + l * 2));
+  }
+  o += sz; let depth = 0, out = [];
+  while (o < buf.byteLength - 8) {
+    const t = u16(o), hs = u16(o + 2), esz = u32(o + 4);
+    if (esz < 8 || o + esz > buf.byteLength) break;
+    if (t === 0x0102) {
+      const name = getstr(u32(o + 20)), ac = u16(o + 28);
+      const ao = o + 36, attrs = [];
+      for (let i = 0; i < ac; i++) {
+        const b = ao + 20 * i;
+        const an = getstr(u32(b + 4)), raw = u32(b + 8), vt = bytes[b + 15], vd = u32(b + 16);
+        let v;
+        if (raw !== 0xFFFFFFFF) v = getstr(raw);
+        else if (vt === 0x12) v = vd === 0xFFFFFFFF ? "true" : "false";
+        else if (vt === 0x10 || vt === 0x11) v = vd;
+        else if (vt === 0x03) v = getstr(vd);
+        else v = "0x" + vd.toString(16);
+        attrs.push(`${an}=${v}`);
+      }
+      out.push("  ".repeat(depth) + `<${name} ${attrs.join(" ")}>`); depth++;
+    } else if (t === 0x0103) { depth = Math.max(0, depth - 1); }
+    o += esz;
+  }
+  return out.join("\n") || "(Manifest rỗng hoặc định dạng lạ)";
+}
+
+// ===== v3.2: DEX — string pool reader =====
+function dexStrings(buf) {
+  const bytes = new Uint8Array(buf), d = new DataView(buf);
+  if (bytes.length < 60 || bytes[0] !== 0x64 || bytes[1] !== 0x65 || bytes[2] !== 0x78) return null; // "dex"
+  const n = d.getUint32(56, true), off = d.getUint32(60, true);
+  const dec = new TextDecoder("utf-8", { fatal: false });
+  const out = [];
+  for (let i = 0; i < n && i < 200000; i++) {
+    let so;
+    try { so = d.getUint32(off + 4 * i, true); } catch (e) { break; }
+    let p = so;
+    if (p >= bytes.length) continue;
+    while (bytes[p] & 0x80) p++; // uleb128 length (bỏ qua, dùng NUL-terminated bên dưới)
+    p++;
+    let e = bytes.indexOf(0, p);
+    if (e < 0) e = bytes.length;
+    out.push(dec.decode(bytes.subarray(p, e)));
+  }
+  return out;
+}
+
+// ===== v3.2: dò khóa XOR lặp cho chuỗi base64 trong DEX (dùng chính hằng số trong file làm ứng viên) =====
+function dexAutoXorKey(strList) {
+  const b64s = [];
+  for (const s of strList) {
+    if (s.length >= 16 && s.length % 4 === 0 && /^[A-Za-z0-9+/]+=*$/.test(s)) {
+      try { const r = atob(s); if (r.length >= 8) b64s.push(r); } catch (e) {}
+    }
+  }
+  if (b64s.length < 5) return null;
+  const sample = b64s.length > 80 ? b64s.slice(0, 80) : b64s;
+  const cands = new Set(strList.filter(s => s.length >= 2 && s.length <= 24 && /^[\x20-\x7e]+$/.test(s)));
+  const printable = s => { let ok = 0; for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); if ((c >= 32 && c < 127) || c === 9 || c === 10 || c === 13) ok++; } return ok / s.length; };
+  let best = null;
+  for (const k of cands) {
+    let tot = 0;
+    for (const raw of sample) {
+      let out = ""; for (let i = 0; i < raw.length; i++) out += String.fromCharCode(raw.charCodeAt(i) ^ k.charCodeAt(i % k.length));
+      tot += printable(out);
+    }
+    const avg = tot / sample.length;
+    if (!best || avg > best.avg) best = { key: k, avg };
+  }
+  return best && best.avg > 0.8 ? best.key : null;
+}
+function dexDecodeStrings(strList, key) {
+  const out = [];
+  for (const s of strList) {
+    if (s.length >= 4 && s.length % 4 === 0 && /^[A-Za-z0-9+/]+=*$/.test(s)) {
+      try {
+        const raw = atob(s);
+        let d = ""; for (let i = 0; i < raw.length; i++) d += String.fromCharCode(raw.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+        let ok = 0; for (let i = 0; i < d.length; i++) { const c = d.charCodeAt(i); if ((c >= 32 && c < 127) || c === 9 || c === 10 || c === 13) ok++; }
+        if (d.length >= 3 && ok / d.length >= 0.85) out.push(d);
+      } catch (e) {}
+    }
+  }
+  return out;
+}
+
+const ARCHIVE_EXT = new Set(["apk","zip","jar","war","ear","aar","xapk","ipa"]);
+const IMAGE_EXT = new Set(["png","jpg","jpeg","gif","bmp","webp","ico","tiff"]);
+
+function getFileType(name, contentType) {
+  const ext = name.split(".").pop().toLowerCase();
+  if (ARCHIVE_EXT.has(ext)) return "archive";
+  if (IMAGE_EXT.has(ext)) return "image";
+  if (TEXT_EXT.has(ext)) return "text";
+  if (contentType && contentType.startsWith("text/")) return "text";
+  return "binary";
+}
+
+function detectBinary(bytes) {
+  const sample = bytes.slice(0, Math.min(1024, bytes.length));
+  let nonText = 0;
+  for (let i = 0; i < sample.length; i++) {
+    const c = sample[i];
+    if (c === 0) return true;
+    if (c < 9 || (c > 13 && c < 32) || c > 126) nonText++;
+  }
+  return nonText / sample.length > 0.1;
+}
+
+const fileState = { files: [], currentIndex: 0, elapsed: 0 };
+const dropZone = document.getElementById("dropZone");
+const fileInput = document.getElementById("fileInput");
+
+dropZone.addEventListener("click", () => fileInput.click());
+dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("dragover"); });
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+dropZone.addEventListener("drop", e => {
+  e.preventDefault();
+  dropZone.classList.remove("dragover");
+  if (e.dataTransfer.files.length) loadFiles(Array.from(e.dataTransfer.files));
+});
+fileInput.addEventListener("change", e => {
+  if (e.target.files.length) loadFiles(Array.from(e.target.files));
+});
+
+// ===== v3.2: mở APK/ZIP — trích manifest, dex liên quan, assets/res-raw =====
+async function expandApk(buffer, origName) {
+  const out = [];
+  let zip;
+  try { zip = await JSZip.loadAsync(buffer); } catch (e) { return null; }
+  const names = Object.keys(zip.files).filter(n => !zip.files[n].dir);
+
+  let manifestText = "", pkg = "";
+  if (names.includes("AndroidManifest.xml")) {
+    try {
+      const ab = await zip.files["AndroidManifest.xml"].async("arraybuffer");
+      manifestText = parseAXML(ab);
+      const m = manifestText.match(/\bpackage=(\S+)/);
+      pkg = m ? m[1] : "";
+      out.push({ name: `${origName} » AndroidManifest.xml`, size: manifestText.length, type: "text", isBinary: false, originalText: manifestText, decoded: null, decodedBuffer: null, replacements: [], chain: [] });
+    } catch (e) {}
+  }
+  const perms = [...manifestText.matchAll(/<uses-permission name=(\S+)>/g)].map(m => m[1]);
+  const providers = [...manifestText.matchAll(/<provider[^>]*exported=true[^>]*>/g)];
+  const info = [
+    `Gói: ${pkg || "(không rõ)"}`,
+    `Quyền (${perms.length}):`, ...perms.map(p => "  • " + p),
+    `Provider exported=true (${providers.length}):`, ...providers.map(p => "  • " + p)
+  ].join("\n");
+  out.push({ name: `${origName} » app_info.txt`, size: info.length, type: "text", isBinary: false, originalText: info, decoded: null, decodedBuffer: null, replacements: [], chain: [] });
+
+  const pkgPrefix = pkg ? pkg.split(".").slice(0, 2).join(".") : null;
+  const dexNames = names.filter(n => /^classes\d*\.dex$/.test(n));
+  let dexAdded = 0;
+  for (const n of dexNames) {
+    if (dexAdded >= 20) break;
+    let ab;
+    try { ab = await zip.files[n].async("arraybuffer"); } catch (e) { continue; }
+    const strs = dexStrings(ab);
+    if (!strs || !strs.length) continue;
+    if (pkgPrefix && !strs.some(s => s.includes(pkgPrefix))) continue; // chỉ lấy dex thuộc code của app
+    dexAdded++;
+    const key = dexAutoXorKey(strs);
+    let body;
+    if (key) {
+      const dec = dexDecodeStrings(strs, key);
+      body = `=== ${n}: ${strs.length} chuỗi, đã giải ${dec.length} chuỗi base64+XOR (khóa "${key}") ===\n\n` + dec.join("\n") + "\n\n--- toàn bộ chuỗi gốc ---\n" + strs.slice(0, 6000).join("\n");
+    } else {
+      body = `=== ${n}: ${strs.length} chuỗi (không thấy mã hoá XOR lặp) ===\n\n` + strs.slice(0, 6000).join("\n");
+    }
+    out.push({ name: `${origName} » ${n} (strings)`, size: body.length, type: "text", isBinary: false, originalText: body, decoded: null, decodedBuffer: null, replacements: [], chain: [] });
+  }
+
+  const assetNames = names.filter(n => /^(assets|res\/raw|res\/xml)\//.test(n)).slice(0, 20);
+  for (const n of assetNames) {
+    let text;
+    try { text = await zip.files[n].async("string"); } catch (e) { continue; }
+    if (!text) continue;
+    out.push({ name: `${origName} » ${n}`, size: text.length, type: "text", isBinary: false, originalText: text, decoded: null, decodedBuffer: null, replacements: [], chain: [] });
+  }
+
+  out.push({ name: `${origName} » _danh_sách_file.txt`, size: 0, type: "text", isBinary: false,
+    originalText: `APK có ${names.length} file. Đã mở: manifest, ${dexAdded} dex thuộc code app, ${assetNames.length} file assets/res. Các file .dex thư viện (androidx, kotlin, ...) và ảnh/res khác không được mở tự động.\n\n` + names.slice(0, 500).join("\n"),
+    decoded: null, decodedBuffer: null, replacements: [], chain: [] });
+  return out;
+}
+
+async function loadFiles(files) {
+  fileState.files = [];
+  const promises = files.map(file => new Promise(resolve => {
+    const fileType = getFileType(file.name, file.type);
+    const reader = new FileReader();
+    reader.onload = e => {
+      const buffer = e.target.result;
+      const bytes = new Uint8Array(buffer);
+      let isBinary = fileType === "binary" || fileType === "image" || fileType === "archive";
+      if (!isBinary) isBinary = detectBinary(bytes);
+      let text = null;
+      if (!isBinary) {
+        try { text = new TextDecoder("utf-8", { fatal: false }).decode(bytes); }
+        catch (err) { isBinary = true; }
+      }
+      resolve({
+        name: file.name, size: file.size, type: fileType, isBinary,
+        originalBuffer: isBinary ? buffer : null,
+        originalText: isBinary ? null : text,
+        decoded: null, decodedBuffer: null, replacements: [], chain: []
+      });
+    };
+    reader.onerror = () => resolve(null);
+    reader.readAsArrayBuffer(file);
+  }));
+  let results = await Promise.all(promises);
+  results = results.filter(Boolean);
+  const expanded = [];
+  for (const r of results) {
+    if (r.type === "archive" && /\.(apk|zip|jar|xapk)$/i.test(r.name)) {
+      showStatus(`⏳ Đang mở ${r.name}...`, "info");
+      const sub = await expandApk(r.originalBuffer, r.name);
+      if (sub && sub.length) { expanded.push(...sub); continue; }
+    }
+    expanded.push(r);
+  }
+  fileState.files = expanded;
+  renderFileList();
+}
+
+function renderFileList() {
+  const el = document.getElementById("fileList");
+  el.classList.add("show");
+  el.innerHTML = fileState.files.map((f, i) => {
+    const sizeStr = f.size < 1024 ? f.size + " B" :
+                    f.size < 1048576 ? (f.size / 1024).toFixed(1) + " KB" :
+                    (f.size / 1048576).toFixed(2) + " MB";
+    let typeLabel = f.type.toUpperCase();
+    let typeClass = "type-" + f.type;
+    if (f.isBinary && f.type === "binary") typeClass = "type-binary";
+    else if (!f.isBinary) { typeLabel = "TEXT"; typeClass = "type-text"; }
+    if (/\.sh$/i.test(f.name)) { typeLabel = "SHELL"; typeClass = "type-script"; }
+    return `<div class="file-item">
+      <div>
+        <div class="name">📄 ${escapeHtml(f.name)}<span class="type-badge ${typeClass}">${typeLabel}</span></div>
+        <div class="meta">${sizeStr}</div>
+      </div>
+      <button class="remove" onclick="removeFile(${i})">✕</button>
+    </div>`;
+  }).join("");
+}
+
+function removeFile(i) {
+  fileState.files.splice(i, 1);
+  renderFileList();
+  if (fileState.files.length === 0) document.getElementById("fileList").classList.remove("show");
+}
+
+function setStep(step, status, result) {
+  const el = document.querySelector(`.pipeline-step[data-step="${step}"]`);
+  if (!el) return;
+  el.className = "pipeline-step " + status;
+  if (result) el.querySelector(".step-result").textContent = result;
+}
+function resetPipeline() {
+  document.querySelectorAll(".pipeline-step").forEach(el => {
+    el.className = "pipeline-step pending";
+    el.querySelector(".step-result").textContent = "";
+  });
+  document.getElementById("pipelineCard").style.display = "block";
+}
+
+// ==================== AUTO RUN ====================
+const autoBtn = document.getElementById("autoBtn");
+const zipBtn = document.getElementById("zipBtn");
+const statusEl = document.getElementById("status");
+const progressBar = document.getElementById("progressBar");
+const progressFill = document.getElementById("progressFill");
+
+autoBtn.addEventListener("click", async () => {
+  const textInput = document.getElementById("inputText").value.trim();
+  const hasText = textInput.length > 0;
+  const hasFiles = fileState.files.length > 0;
+
+  if (!hasText && !hasFiles) {
+    showStatus("⚠️ Vui lòng nhập text hoặc chọn file!", "error");
+    return;
+  }
+
+  autoBtn.disabled = true;
+  zipBtn.disabled = true;
+  autoBtn.innerHTML = '<span class="spinner"></span>Đang chạy...';
+  progressBar.classList.add("show");
+  progressFill.style.width = "0%";
+  resetPipeline();
+
+  const t0 = performance.now();
+  const options = {
+    maxLayers: parseInt(document.getElementById("maxLayers").value) || 12,
+    minImprove: parseFloat(document.getElementById("minImprove").value) || 2,
+    minScore: parseFloat(document.getElementById("minScore").value) || 15,
+    cryptoKey: document.getElementById("cryptoKey").value.trim()
+  };
+
+  try {
+    setStep("detect", "active");
+    showStatus("⏳ [1/5] Đang dò (quote-aware)...", "info");
+    progressFill.style.width = "10%";
+    await sleep(60);
+
+    const inputForDetect = hasText ? textInput : (fileState.files[0]?.originalText || "");
+    let detectResults = inputForDetect ? detectAll(inputForDetect, options.cryptoKey) : [];
+    const matchCount = detectResults.filter(r => r.match === "match").length;
+    const maybeCount = detectResults.filter(r => r.match === "maybe").length;
+    setStep("detect", "done", `${matchCount} khớp, ${maybeCount} có thể / ${detectResults.length}`);
+    progressFill.style.width = "25%";
+
+    setStep("identify", "active");
+    await sleep(60);
+    let identifiedTypes = [];
+    if (matchCount > 0) identifiedTypes = detectResults.filter(r => r.match === "match").slice(0, 3).map(r => r.name);
+    else if (maybeCount > 0) identifiedTypes = detectResults.filter(r => r.match === "maybe").slice(0, 3).map(r => r.name);
+    setStep("identify", "done", identifiedTypes.join(", ") || "Không xác định");
+    progressFill.style.width = "40%";
+
+    setStep("chain", "active");
+    showStatus("⏳ [3/5] Bóc tầng...", "info");
+    await sleep(60);
+
+    let chainResult = { chain: [], final: "", finalScore: 0 };
+    if (hasFiles) {
+      let completed = 0;
+      for (const file of fileState.files) {
+        if (file.isBinary) {
+          const bytes = new Uint8Array(file.originalBuffer);
+          const latinStr = bytesToLatin1(bytes);
+          const result = multiLayerDecode(latinStr, options);
+          const outBytes = latin1ToBytes(result.final);
+          file.decodedBuffer = outBytes.buffer;
+          file.chain = result.chain;
+          file.replacements = result.chain.slice(1).map(c => ({ method: c.method }));
+        } else {
+          const result = multiLayerDecode(file.originalText, options);
+          file.decoded = result.final;
+          file.chain = result.chain;
+          file.replacements = result.chain.slice(1).map(c => ({ method: c.method }));
+        }
+        completed++;
+        progressFill.style.width = (40 + (completed / fileState.files.length) * 25) + "%";
+        await sleep(0);
+      }
+      chainResult = { chain: fileState.files[0].chain, final: fileState.files[0].decoded || "", finalScore: 0 };
+    } else {
+      chainResult = multiLayerDecode(textInput, options);
+    }
+    const layers = chainResult.chain.length - 1;
+    setStep("chain", "done", layers > 0 ? `${layers} tầng` : "Không có");
+    progressFill.style.width = "70%";
+
+    setStep("tree", "active");
+    await sleep(60);
+    let treeResult = { nodeCount: 0 };
+    if (inputForDetect && inputForDetect.length < 5000) {
+      treeResult = buildTree(inputForDetect, options, 3, 15, 250);
+    }
+    setStep("tree", "done", `${treeResult.nodeCount} node`);
+    progressFill.style.width = "85%";
+
+    setStep("output", "active");
+    await sleep(60);
+    const elapsed = performance.now() - t0;
+    fileState.elapsed = elapsed;
+
+    renderSummary({ detectResults, identifiedTypes, chainResult, treeResult, elapsed, hasFiles, matchCount, maybeCount });
+    if (hasFiles) renderFileResults(elapsed);
+    else renderTextResult(chainResult, detectResults, treeResult, elapsed);
+
+    setStep("output", "done", `${elapsed.toFixed(0)}ms`);
+    progressFill.style.width = "100%";
+    showStatus(`✅ Xong trong ${elapsed.toFixed(0)}ms — ${identifiedTypes.length} loại, ${layers} tầng`, "success");
+    zipBtn.disabled = false;
+  } catch (e) {
+    showStatus("❌ Lỗi: " + e.message, "error");
+    console.error(e);
+  } finally {
+    autoBtn.disabled = false;
+    autoBtn.innerHTML = "⚡ CHẠY TỰ ĐỘNG TẤT CẢ";
+    setTimeout(() => progressBar.classList.remove("show"), 800);
+  }
+});
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function renderSummary(data) {
+  const { detectResults, identifiedTypes, chainResult, treeResult, elapsed, matchCount, maybeCount } = data;
+  const summaryEl = document.getElementById("summary");
+  const isEncoded = matchCount > 0 || maybeCount > 0;
+  summaryEl.className = "summary" + (isEncoded ? "" : " negative");
+
+  if (isEncoded) {
+    const layers = chainResult.chain.length - 1;
+    let detail = `<strong>✓ PHÁT HIỆN MÃ HÓA</strong><br>`;
+    detail += `🎯 <strong>Loại:</strong> ${identifiedTypes.join(", ") || "chưa xác định"}<br>`;
+    detail += `⛓️ <strong>Số tầng:</strong> ${layers}<br>`;
+    detail += `🌳 <strong>Cây:</strong> ${treeResult.nodeCount} node<br>`;
+    detail += `📊 <strong>Detect:</strong> ${matchCount} khớp, ${maybeCount} có thể<br>`;
+    detail += `⏱️ <strong>Thời gian:</strong> ${elapsed.toFixed(0)}ms`;
+    summaryEl.innerHTML = `
+      <div class="verdict"><div class="verdict-icon">✅</div><div class="verdict-text positive">ĐÃ GIẢI MÃ</div></div>
+      <div class="detail">${detail}</div>
+    `;
+  } else {
+    summaryEl.innerHTML = `
+      <div class="verdict"><div class="verdict-icon">❌</div><div class="verdict-text negative">KHÔNG PHÁT HIỆN</div></div>
+      <div class="detail">Không có phương pháp nào khớp.</div>
+    `;
+  }
+  document.getElementById("summaryCard").style.display = "block";
+}
+
+function renderTextResult(chainResult, detectResults, treeResult, elapsed) {
+  const resultCard = document.getElementById("resultCard");
+  resultCard.style.display = "block";
+  const layers = chainResult.chain.length - 1;
+  const matchCount = detectResults.filter(r => r.match === "match").length;
+
+  document.getElementById("stats").innerHTML = `
+    <div class="stat-box"><span class="num">${matchCount}</span><span class="label">Khớp</span></div>
+    <div class="stat-box"><span class="num">${layers}</span><span class="label">Tầng</span></div>
+    <div class="stat-box"><span class="num">${treeResult.nodeCount}</span><span class="label">Node</span></div>
+    <div class="stat-box"><span class="num">${elapsed.toFixed(0)}ms</span><span class="label">Time</span></div>
+  `;
+
+  const tabsEl = document.getElementById("fileTabs");
+  tabsEl.innerHTML = "";
+  const views = [
+    { id: "final", label: "✨ Kết quả" },
+    { id: "chain", label: `⛓️ ${layers} tầng` },
+    { id: "detect", label: `🔍 ${detectResults.length} PP` },
+    { id: "ioc", label: "🛡️ IOC" }
+  ];
+  views.forEach((v, i) => {
+    const tab = document.createElement("button");
+    tab.className = "file-tab" + (i === 0 ? " active" : "");
+    tab.textContent = v.label;
+    tab.onclick = () => {
+      document.querySelectorAll(".file-tab").forEach(t => t.classList.remove("active"));
+      tab.classList.add("active");
+      renderTextView(v.id, chainResult, detectResults);
+    };
+    tabsEl.appendChild(tab);
+  });
+  renderTextView("final", chainResult, detectResults);
+}
+
+
+// ===== v3.1: IOC extractor (phân tích tĩnh, chỉ đọc văn bản — không thực thi gì) =====
+function extractIOC(text) {
+  const uniq = a => [...new Set(a)];
+  const urls = uniq(text.match(/\b(?:https?|ftp):\/\/[^\s'"<>`\\)]+/gi) || []);
+  const ips = uniq((text.match(/\b(?:\d{1,3}\.){3}\d{1,3}(?::\d{1,5})?\b/g) || [])
+    .filter(x => x.split(":")[0].split(".").every(n => +n <= 255)));
+  const doms = uniq((text.match(/\b(?:[a-z0-9-]+\.)+(?:com|net|org|io|xyz|top|ru|cn|info|me|cc|tk|onion|sh|app|dev)\b/gi) || []));
+  const rules = [
+    ["Tải & chạy trực tiếp (curl/wget | sh)", /(curl|wget)[^\n|]*\|\s*(ba|z)?sh/i],
+    ["Giải mã rồi thực thi (base64 -d | sh)", /base64\s+(-d|--decode)[^\n]*\|\s*(ba|z)?sh/i],
+    ["Thực thi động (eval / sh -c)", /\beval\b|\bsh\s+-c\b/i],
+    ["Reverse shell (/dev/tcp, nc -e)", /\/dev\/tcp\/|\bnc\b[^\n]*\s-e\b/i],
+    ["Cấp quyền thực thi (chmod +x)", /chmod\s+(\+x|[0-7]*7[0-7]*)/i],
+    ["Đặt lịch / khởi động cùng máy (cron, rc.local)", /crontab|\/etc\/cron|rc\.local|init\.d/i],
+    ["Xóa dữ liệu (rm -rf)", /rm\s+-[a-z]*r[a-z]*f?\s+\//i],
+    ["Lệnh root / su", /\bsu\s+-?c?\b|\bsudo\b/i]
+  ];
+  const hits = rules.filter(r => r[1].test(text)).map(r => "⚠ " + r[0]);
+  const sec = (t, a) => `## ${t} (${a.length})\n` + (a.length ? a.map(x => "  • " + x).join("\n") : "  (không có)") + "\n\n";
+  return "=== IOC / DẤU HIỆU ĐÁNG NGỜ ===\n\n" + sec("Hành vi", hits) + sec("URL", urls) + sec("IP", ips) + sec("Tên miền", doms);
+}
+
+function renderTextView(viewId, chainResult, detectResults) {
+  const outputEl = document.getElementById("outputPre");
+  if (viewId === "final") {
+    outputEl.textContent = chainResult.final || "(không có kết quả)";
+  } else if (viewId === "ioc") {
+    outputEl.textContent = extractIOC(chainResult.final || "");
+  } else if (viewId === "chain") {
+    let out = "=== CHUỖI DECODE ===\n\n";
+    chainResult.chain.forEach(c => {
+      out += `[Layer ${c.layer}] ${c.method} — Score: ${c.score.toFixed(1)}`;
+      if (c.delta) out += ` (${c.delta > 0 ? "+" : ""}${c.delta.toFixed(1)})`;
+      out += `\n${c.text.substring(0, 400)}${c.text.length > 400 ? "..." : ""}\n\n`;
+    });
+    outputEl.textContent = out;
+  } else {
+    let out = "=== KẾT QUẢ DÒ ===\n\n";
+    detectResults.forEach(r => {
+      let icon = r.match === "match" ? "✓" : r.match === "maybe" ? "⚠" : "✗";
+      out += `${icon} [${r.confidence}%] ${r.name}\n   ${r.reason}\n`;
+      if (r.output) out += `   Output: ${String(r.output).substring(0, 120)}${String(r.output).length > 120 ? "..." : ""}\n`;
+      out += `\n`;
+    });
+    outputEl.textContent = out;
+  }
+}
+
+function renderFileResults(elapsed) {
+  const resultCard = document.getElementById("resultCard");
+  resultCard.style.display = "block";
+  const files = fileState.files;
+  const totalReplacements = files.reduce((s, f) => s + (f.replacements?.length || 0), 0);
+  const binaryCount = files.filter(f => f.isBinary).length;
+
+  document.getElementById("stats").innerHTML = `
+    <div class="stat-box"><span class="num">${files.length}</span><span class="label">File</span></div>
+    <div class="stat-box"><span class="num">${totalReplacements}</span><span class="label">Tầng</span></div>
+    <div class="stat-box"><span class="num">${binaryCount}</span><span class="label">Binary</span></div>
+    <div class="stat-box"><span class="num">${elapsed.toFixed(0)}ms</span><span class="label">Time</span></div>
+  `;
+
+  const tabsEl = document.getElementById("fileTabs");
+  tabsEl.innerHTML = "";
+  files.forEach((f, i) => {
+    const tab = document.createElement("button");
+    tab.className = "file-tab" + (i === fileState.currentIndex ? " active" : "");
+    tab.innerHTML = `${f.isBinary ? "🔢" : "📄"} ${escapeHtml(f.name.substring(0, 20))}<span class="badge-count">${f.replacements?.length || 0}</span>`;
+    tab.onclick = () => { fileState.currentIndex = i; renderFileResults(elapsed); };
+    tabsEl.appendChild(tab);
+  });
+
+  const current = files[fileState.currentIndex];
+  const outputEl = document.getElementById("outputPre");
+  if (current.isBinary) {
+    const buffer = current.decodedBuffer || current.originalBuffer;
+    const bytes = new Uint8Array(buffer);
+    const maxBytes = Math.min(bytes.length, 4096);
+    let hex = `=== HEX DUMP (${bytes.length} bytes) ===\n\n`;
+    for (let i = 0; i < maxBytes; i += 16) {
+      const offset = i.toString(16).padStart(8, "0");
+      const hexBytes = [], ascii = [];
+      for (let j = 0; j < 16; j++) {
+        if (i + j < bytes.length) {
+          const b = bytes[i + j];
+          hexBytes.push(b.toString(16).padStart(2, "0"));
+          ascii.push(b >= 32 && b < 127 ? String.fromCharCode(b) : ".");
+        } else { hexBytes.push("  "); ascii.push(" "); }
+      }
+      hex += `${offset}  ${hexBytes.join(" ")}  |${ascii.join("")}|\n`;
+    }
+    outputEl.textContent = hex;
+  } else {
+    outputEl.textContent = current.decoded || current.originalText || "";
+  }
+}
+
+document.getElementById("copyBtn").addEventListener("click", () => {
+  navigator.clipboard.writeText(document.getElementById("outputPre").textContent).then(() => {
+    const btn = document.getElementById("copyBtn");
+    const orig = btn.textContent;
+    btn.textContent = "✅ Đã copy!";
+    setTimeout(() => btn.textContent = orig, 1500);
+  });
+});
+
+document.getElementById("downloadBtn").addEventListener("click", () => {
+  if (fileState.files.length > 0) {
+    const current = fileState.files[fileState.currentIndex];
+    if (current.isBinary && current.decodedBuffer) {
+      downloadBlob(new Blob([current.decodedBuffer]), current.name);
+    } else if (!current.isBinary) {
+      downloadBlob(new Blob([current.decoded || current.originalText], { type: "text/plain;charset=utf-8" }), current.name);
+    }
+  } else {
+    downloadBlob(new Blob([document.getElementById("outputPre").textContent], { type: "text/plain;charset=utf-8" }), "decoded.txt");
+  }
+});
+
+zipBtn.addEventListener("click", async () => {
+  const files = fileState.files;
+  const hasFiles = files.length > 0;
+  const text = document.getElementById("inputText").value.trim();
+  if (!hasFiles && !text) return;
+
+  zipBtn.disabled = true;
+  zipBtn.textContent = "⏳ Đang nén...";
+  try {
+    const zip = new JSZip();
+    if (hasFiles) {
+      files.forEach(file => {
+        if (file.isBinary && file.decodedBuffer) zip.file(`decoded/${file.name}`, file.decodedBuffer);
+        else if (!file.isBinary) zip.file(`decoded/${file.name}`, file.decoded || file.originalText);
+        if (file.chain && file.chain.length > 1) {
+          let report = `BÁO CÁO — ${file.name}\n${"=".repeat(40)}\nSố tầng: ${file.chain.length - 1}\n\n`;
+          file.chain.forEach(c => {
+            report += `[Layer ${c.layer}] ${c.method} — Score ${c.score.toFixed(1)}\n${c.text.substring(0, 300)}\n\n`;
+          });
+          zip.file(`decoded/${file.name}.report.txt`, report);
+        }
+      });
+    } else {
+      const options = {
+        maxLayers: parseInt(document.getElementById("maxLayers").value) || 12,
+        minImprove: parseFloat(document.getElementById("minImprove").value) || 2,
+        minScore: parseFloat(document.getElementById("minScore").value) || 15,
+        cryptoKey: document.getElementById("cryptoKey").value.trim()
+      };
+      const chainResult = multiLayerDecode(text, options);
+      zip.file("decoded.txt", chainResult.final);
+      let report = "CHUỖI DECODE\n" + "=".repeat(40) + "\n\n";
+      chainResult.chain.forEach(c => {
+        report += `[Layer ${c.layer}] ${c.method} — Score ${c.score.toFixed(1)}\n${c.text.substring(0, 300)}\n\n`;
+      });
+      zip.file("report.txt", report);
+    }
+    zip.file("README.txt", `DEOBFUSCATOR SHELL v3 — ${new Date().toLocaleString("vi-VN")}\nFiles: ${files.length}`);
+    const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
+    downloadBlob(blob, `deobfuscated_${Date.now()}.zip`);
+    showStatus(`✅ ZIP (${(blob.size/1024).toFixed(1)} KB)`, "success");
+  } catch (e) {
+    showStatus("❌ Lỗi ZIP: " + e.message, "error");
+  } finally {
+    zipBtn.disabled = false;
+    zipBtn.textContent = "📦 XUẤT ZIP";
+  }
+});
+
+function showStatus(msg, type) {
+  statusEl.textContent = msg;
+  statusEl.className = "status show " + type;
+}
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+
+// ===== v3.1: UX =====
+(function () {
+  const ids = ["maxLayers", "minImprove", "minScore", "cryptoKey", "quoteAware"];
+  const KEY = "deobf_v31_cfg";
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEY) || "{}");
+    ids.forEach(id => { const el = document.getElementById(id); if (el && id in saved) { el.type === "checkbox" ? (el.checked = saved[id]) : (el.value = saved[id]); } });
+  } catch (e) {}
+  ids.forEach(id => document.getElementById(id).addEventListener("change", () => {
+    try { const o = {}; ids.forEach(i => { const el = document.getElementById(i); o[i] = el.type === "checkbox" ? el.checked : el.value; }); localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) {}
+  }));
+  const inp = document.getElementById("inputText"), cnt = document.getElementById("charCount");
+  const upd = () => { cnt.textContent = inp.value.length.toLocaleString() + " ký tự · " + (inp.value ? inp.value.split("\n").length : 0) + " dòng"; };
+  inp.addEventListener("input", upd); upd();
+  document.getElementById("clearBtn").addEventListener("click", () => { inp.value = ""; upd(); inp.focus(); });
+  document.getElementById("pasteBtn").addEventListener("click", async () => {
+    try { inp.value = await navigator.clipboard.readText(); upd(); } catch (e) { showStatus("Không đọc được clipboard — hãy dán thủ công (Ctrl+V).", "error"); }
+  });
+  document.addEventListener("keydown", e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && !autoBtn.disabled) autoBtn.click();
+  });
+})();
+</script>
+</body>
+</html>
